@@ -37,7 +37,7 @@ def test_special_end_requires_special():
 
 def test_unknown_store_rejected():
     with pytest.raises(ValidationError):
-        make(store="aldi")
+        make(store="foodland")
 
 
 def test_health():

@@ -7,9 +7,10 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validat
 
 
 class Store(StrEnum):
-    # Adding Aldi later is one line here plus seed rows; the DB has no CHECK on store.
+    # Adding a store is one line here plus seed rows; the DB has no CHECK on store.
     COLES = "coles"
     WOOLWORTHS = "woolworths"
+    ALDI = "aldi"  # no seed rows yet; present so N-store logic can be exercised
 
 
 BrandLabel = Literal["house_brand", "branded"]

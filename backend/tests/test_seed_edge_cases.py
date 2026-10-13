@@ -29,7 +29,7 @@ def test_seed_validates_and_is_sane(products):
     assert len(products) >= 250
     ingredients = {p.search_terms[0] for p in products.values()}
     assert len(ingredients) >= 100
-    for store in Store:
+    for store in (Store.COLES, Store.WOOLWORTHS):
         per_item: dict[str, int] = {}
         for p in products.values():
             if p.store == store:
@@ -91,7 +91,10 @@ def test_e_branded_product_at_both_stores(products):
     col, wol = products["col-tomato-sauce-02"], products["wol-tomato-sauce-02"]
     assert col.brand == wol.brand == "Bellvue"
     assert col.brand_label == wol.brand_label == "branded"
-    assert col.pack_size == wol.pack_size and {col.store, wol.store} == set(Store)
+    assert col.pack_size == wol.pack_size and {col.store, wol.store} == {
+        Store.COLES,
+        Store.WOOLWORTHS,
+    }
 
 
 def test_f_popular_brand_on_special_beats_house_brand(products):

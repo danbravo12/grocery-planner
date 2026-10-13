@@ -129,16 +129,19 @@ def pack_size_within_tolerance(
     return abs(Decimal(pack_size) - needed) <= tolerance * needed
 
 
-def special_active(product: CatalogueProduct, as_of: date) -> bool:
+class HasSpecial(Protocol):
+    on_special: bool
+    special_end_date: date | None
+
+
+def special_active(product: HasSpecial, as_of: date) -> bool:
     """On special and not yet past its end date (the end date itself still counts)."""
     return product.on_special and (
         product.special_end_date is None or as_of <= product.special_end_date
     )
 
 
-def specials_ending_within(
-    products: list[CatalogueProduct], as_of: date, days: int
-) -> list[CatalogueProduct]:
+def specials_ending_within[T: HasSpecial](products: list[T], as_of: date, days: int) -> list[T]:
     """Active specials whose end date falls within `days` days of `as_of` (inclusive)."""
     return [
         p

@@ -69,7 +69,7 @@ def test_named_brand_is_not_cut_off_by_limit(source):
 @pytest.mark.skipif(not os.getenv("SUPABASE_DB_URL"), reason="SUPABASE_DB_URL not set")
 def test_postgres_source_matches_seeded_source(source):
     pg = PostgresPriceSource(os.environ["SUPABASE_DB_URL"])
-    for store in Store:
+    for store in (Store.COLES, Store.WOOLWORTHS):
         assert pg.search("bacon", store, 10) == source.search("bacon", store, 10)
         assert pg.search("tomato sauce", store, 1, "Bellvue") == source.search(
             "tomato sauce", store, 1, "Bellvue"
