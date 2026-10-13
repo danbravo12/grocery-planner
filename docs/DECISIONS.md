@@ -28,10 +28,10 @@ Choices made in step 1 that the design doc did not specify. Newest decisions go 
 - `price_catalogue.unit_price` is a **generated column**, so it cannot disagree with price and pack size.
 - Primary key of `price_catalogue` is `(store, product_id)`; product IDs are `col-`/`wol-` + slug + `-01` house brand, `-02` branded, `-03` premium.
 - RLS enabled on all five tables with no policies. The migration was parsed with `pglast` but **not executed** against a real Postgres.
-- `dish_cache` key is the normalised dish name only. Open question for the ingredient-agent step: the avoid field is per meal, so substitution has to happen after the cache lookup, not inside the cached value.
+- ~~`dish_cache` keyed on dish name only~~ superseded in step 1b (now keyed on dish and avoid).
 
 ## Seed
-- **103 ingredients, 346 products**, every ingredient has 1-3 candidates per store. Reference date is 2026-10-12 (Monday); all timestamps are that date.
+- **103 ingredients, 346 products**, every ingredient has 1-3 candidates per store. Dates are relative to an anchor (see step 1b); tests use 2026-10-12 (Monday).
 - **Generated once by a throwaway script** (not committed); the JSON is the source of truth and is edited directly from now on.
 - Loader is a module, `grocery_planner.tools.seed_sql`, not a loose script, so it reuses the model and can be tested. Output is idempotent (`ON CONFLICT ... DO UPDATE`) in one transaction.
 - The generated SQL file is git-ignored; the JSON is the committed source.
@@ -42,3 +42,13 @@ Choices made in step 1 that the design doc did not specify. Newest decisions go 
 - **`PostgresPriceSource`** fetches the store's rows and reuses the same Python matcher, so the two sources cannot drift apart. It opens one connection per call; there is no pool at demo scale.
 - **`packs_needed`** accepts `Decimal` or `int`, raises `UnitMismatchError` (a `ValueError`) on unit mismatch and `ValueError` for non-positive quantities. No kg-to-g conversion (the doc says there is no conversion tool).
 - **`pack_size_within_tolerance`** measures the gap relative to the *needed* size, inclusive at exactly the tolerance. Default tolerance is `Decimal("0.15")`.
+
+## Step 1b
+- **Relative seed dates.** The seed JSON now has `price_age_days` (days before the anchor) and `special_ends_in_days` (days after it) instead of absolute dates; `reference_date` is gone. `CatalogueProduct` still holds real dates. `resolve_seed_product` / `load_seed_products` in `price_lookup.py` do the conversion.
+- **Anchor default** is today in `Australia/Sydney`, taken by `SeededFilePriceSource(anchor=...)` and `seed_sql(anchor=...)` (CLI: optional `YYYY-MM-DD` argument). `price_timestamp` resolves to midnight Sydney time on `anchor - price_age_days`. Added the `tzdata` dependency so this works in containers without a system tz database.
+- **`special_active(product, as_of)`** is true when on special and `as_of` is on or before the end date (the end date itself counts as active). A special with no end date stays active. **`specials_ending_within(products, as_of, days)`** returns active specials whose end date is 0 to `days` days after `as_of`, inclusive.
+- **Tests use a fixed anchor** (2026-10-12). EDGE_CASES.md describes case (c) as "ends 3 days after the anchor".
+- **Brand filter.** `PriceSource.search(term, store, limit, brand=None)`. Brand is compared case-insensitively on the trimmed value, with exact equality (not substring), and applied before ranking and `limit` in both sources.
+- **`dish_cache` key** is now `(dish_key, avoid_key)`, both normalised: lowercase, trimmed, whitespace collapsed. `avoid_key` is `''` for no avoid; otherwise the avoid text is split on commas, normalised, de-duplicated (my addition, so "nuts, nuts" matches "nuts"), sorted and rejoined with `,`. Helper: `make_dish_cache_key(dish_name, avoid)` in `domain/dish_cache.py`, returning `(dish_key, avoid_key)`. The SQL notes that rows are only written after the ingredient agent's output passes schema validation.
+- **README** setup now uses `brew install uv`, `uv sync`, `uv run pytest`.
+- **Known limitation:** `PostgresPriceSource` filters in Python after fetching all rows for a store. Acceptable at ~350 rows; a live source would search server-side.

@@ -71,13 +71,18 @@ CREATE TABLE price_catalogue (
     CHECK (special_end_date IS NULL OR on_special)
 );
 
--- dish_cache: dish -> per-serving ingredients, so repeat dishes skip the LLM.
+-- dish_cache: (dish, avoid) -> per-serving ingredients, so repeat dishes skip the LLM.
+-- Rows are only written after the ingredient agent's output passes schema validation.
+-- Both key parts are normalised by make_dish_cache_key() (lowercase, trimmed, whitespace
+-- collapsed; avoid is split on commas, sorted and rejoined). avoid_key is '' for no avoid.
 CREATE TABLE dish_cache (
-    dish_key    text PRIMARY KEY,                        -- inferred: normalised (lowercased, trimmed) dish name
+    dish_key    text NOT NULL,                           -- inferred
+    avoid_key   text NOT NULL DEFAULT '',                -- inferred
     dish_name   text NOT NULL,
     ingredients jsonb NOT NULL,                          -- per-serving ingredient list
     model       text,                                    -- inferred: which model produced it
-    created_at  timestamptz NOT NULL DEFAULT now()
+    created_at  timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (dish_key, avoid_key)
 );
 
 -- usage_counters: daily token counts per scope, plus the day-stop flag.

@@ -14,11 +14,12 @@ db/seed/         seeded price catalogue + EDGE_CASES.md
 docs/       design doc and DECISIONS.md
 ```
 
-## Running tests
+## Setup and running tests
 
-Needs [uv](https://docs.astral.sh/uv/). No network or database is required.
+On a fresh Mac, install [uv](https://docs.astral.sh/uv/) with Homebrew; uv then fetches Python 3.12 itself. No network or database is needed to run the tests.
 
 ```bash
+brew install uv
 cd backend
 uv sync
 uv run pytest
@@ -33,9 +34,11 @@ Every price in `db/seed/price_catalogue.json` is made up for testing, in AUD, an
 
 ## Loading the catalogue into Postgres
 
+Seed dates are relative ("special ends in 3 days"), so re-run the loader to refresh them; they resolve against today in Australia/Sydney unless you pass an anchor date.
+
 ```bash
 cd backend
-uv run python -m grocery_planner.tools.seed_sql > ../db/seed/price_catalogue.sql
+uv run python -m grocery_planner.tools.seed_sql > ../db/seed/price_catalogue.sql  # optional arg: anchor date YYYY-MM-DD
 psql "$SUPABASE_DB_URL" -f ../db/migrations/001_init.sql -f ../db/seed/price_catalogue.sql
 ```
 

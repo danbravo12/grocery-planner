@@ -1,6 +1,5 @@
 {
- "reference_date": "2026-10-12",
- "note": "Fictional seeded prices (AUD). Not real store data.",
+ "note": "Fictional seeded prices (AUD). Not real store data. Dates are relative to an anchor date resolved at load time: price_age_days = days before the anchor; special_ends_in_days = days after it.",
  "products": [
   {
    "store": "coles",
@@ -20,10 +19,10 @@
    "pack_unit": "g",
    "price": "22.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -43,10 +42,10 @@
    "pack_unit": "g",
    "price": "31.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "premium"
+   "quality_band": "premium",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -66,10 +65,10 @@
    "pack_unit": "g",
    "price": "21.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -89,10 +88,10 @@
    "pack_unit": "g",
    "price": "32.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "premium"
+   "quality_band": "premium",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -110,10 +109,10 @@
    "pack_unit": "g",
    "price": "6.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -131,10 +130,10 @@
    "pack_unit": "g",
    "price": "7.40",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -152,10 +151,10 @@
    "pack_unit": "g",
    "price": "9.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "premium"
+   "quality_band": "premium",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -173,10 +172,10 @@
    "pack_unit": "g",
    "price": "6.80",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -194,10 +193,10 @@
    "pack_unit": "g",
    "price": "7.20",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -215,10 +214,10 @@
    "pack_unit": "g",
    "price": "9.90",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "premium"
+   "quality_band": "premium",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -236,10 +235,10 @@
    "pack_unit": "g",
    "price": "12.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -257,10 +256,10 @@
    "pack_unit": "g",
    "price": "16.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "premium"
+   "quality_band": "premium",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -278,10 +277,10 @@
    "pack_unit": "g",
    "price": "12.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -299,10 +298,10 @@
    "pack_unit": "g",
    "price": "16.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "premium"
+   "quality_band": "premium",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -320,10 +319,10 @@
    "pack_unit": "g",
    "price": "9.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -341,10 +340,10 @@
    "pack_unit": "g",
    "price": "9.40",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -362,10 +361,10 @@
    "pack_unit": "g",
    "price": "13.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -383,10 +382,10 @@
    "pack_unit": "g",
    "price": "17.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "premium"
+   "quality_band": "premium",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -404,10 +403,10 @@
    "pack_unit": "g",
    "price": "12.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -425,10 +424,10 @@
    "pack_unit": "g",
    "price": "18.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "premium"
+   "quality_band": "premium",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -446,10 +445,10 @@
    "pack_unit": "g",
    "price": "9.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -467,10 +466,10 @@
    "pack_unit": "g",
    "price": "9.80",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -488,10 +487,10 @@
    "pack_unit": "g",
    "price": "11.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -509,10 +508,10 @@
    "pack_unit": "g",
    "price": "12.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -530,10 +529,10 @@
    "pack_unit": "g",
    "price": "14.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "premium"
+   "quality_band": "premium",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -551,10 +550,10 @@
    "pack_unit": "g",
    "price": "8.50",
    "on_special": true,
-   "special_end_date": "2026-10-15",
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": 3
   },
   {
    "store": "woolworths",
@@ -572,10 +571,10 @@
    "pack_unit": "g",
    "price": "12.80",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -593,10 +592,10 @@
    "pack_unit": "g",
    "price": "15.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "premium"
+   "quality_band": "premium",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -614,10 +613,10 @@
    "pack_unit": "g",
    "price": "10.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -635,10 +634,10 @@
    "pack_unit": "g",
    "price": "9.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -656,10 +655,10 @@
    "pack_unit": "g",
    "price": "7.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -677,10 +676,10 @@
    "pack_unit": "g",
    "price": "7.80",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -698,10 +697,10 @@
    "pack_unit": "g",
    "price": "9.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -719,10 +718,10 @@
    "pack_unit": "g",
    "price": "14.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "premium"
+   "quality_band": "premium",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -740,10 +739,10 @@
    "pack_unit": "g",
    "price": "8.80",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -761,10 +760,10 @@
    "pack_unit": "g",
    "price": "14.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "premium"
+   "quality_band": "premium",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -782,10 +781,10 @@
    "pack_unit": "g",
    "price": "5.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -803,10 +802,10 @@
    "pack_unit": "g",
    "price": "4.50",
    "on_special": true,
-   "special_end_date": "2026-10-18",
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": 6
   },
   {
    "store": "coles",
@@ -824,10 +823,10 @@
    "pack_unit": "g",
    "price": "8.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "premium"
+   "quality_band": "premium",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -845,10 +844,10 @@
    "pack_unit": "g",
    "price": "5.80",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -866,10 +865,10 @@
    "pack_unit": "g",
    "price": "7.40",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -887,10 +886,10 @@
    "pack_unit": "g",
    "price": "8.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "premium"
+   "quality_band": "premium",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -908,10 +907,10 @@
    "pack_unit": "g",
    "price": "5.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -929,10 +928,10 @@
    "pack_unit": "g",
    "price": "6.80",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -950,10 +949,10 @@
    "pack_unit": "g",
    "price": "5.20",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -971,10 +970,10 @@
    "pack_unit": "g",
    "price": "6.80",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -992,10 +991,10 @@
    "pack_unit": "g",
    "price": "3.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -1013,10 +1012,10 @@
    "pack_unit": "g",
    "price": "4.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -1034,10 +1033,10 @@
    "pack_unit": "g",
    "price": "3.80",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -1055,10 +1054,10 @@
    "pack_unit": "g",
    "price": "4.40",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -1076,10 +1075,10 @@
    "pack_unit": "g",
    "price": "15.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -1097,10 +1096,10 @@
    "pack_unit": "g",
    "price": "19.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "premium"
+   "quality_band": "premium",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -1118,10 +1117,10 @@
    "pack_unit": "g",
    "price": "14.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -1139,10 +1138,10 @@
    "pack_unit": "g",
    "price": "19.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "premium"
+   "quality_band": "premium",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -1161,10 +1160,10 @@
    "pack_unit": "g",
    "price": "8.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -1183,10 +1182,10 @@
    "pack_unit": "g",
    "price": "7.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -1204,10 +1203,10 @@
    "pack_unit": "g",
    "price": "14.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -1225,10 +1224,10 @@
    "pack_unit": "g",
    "price": "13.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -1246,10 +1245,10 @@
    "pack_unit": "g",
    "price": "6.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -1267,10 +1266,10 @@
    "pack_unit": "g",
    "price": "5.80",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -1288,10 +1287,10 @@
    "pack_unit": "g",
    "price": "5.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -1309,10 +1308,10 @@
    "pack_unit": "g",
    "price": "5.20",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -1330,10 +1329,10 @@
    "pack_unit": "g",
    "price": "3.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -1351,10 +1350,10 @@
    "pack_unit": "g",
    "price": "2.90",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -1371,10 +1370,10 @@
    "pack_unit": "g",
    "price": "2.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -1391,10 +1390,10 @@
    "pack_unit": "g",
    "price": "2.60",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -1411,10 +1410,10 @@
    "pack_unit": "g",
    "price": "2.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -1431,10 +1430,10 @@
    "pack_unit": "g",
    "price": "2.60",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -1451,10 +1450,10 @@
    "pack_unit": "g",
    "price": "2.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -1471,10 +1470,10 @@
    "pack_unit": "g",
    "price": "3.80",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "premium"
+   "quality_band": "premium",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -1491,10 +1490,10 @@
    "pack_unit": "g",
    "price": "2.40",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -1511,10 +1510,10 @@
    "pack_unit": "g",
    "price": "3.60",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "premium"
+   "quality_band": "premium",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -1530,10 +1529,10 @@
    "pack_unit": "each",
    "price": "3.20",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -1549,10 +1548,10 @@
    "pack_unit": "each",
    "price": "3.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -1568,10 +1567,10 @@
    "pack_unit": "each",
    "price": "4.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -1587,10 +1586,10 @@
    "pack_unit": "each",
    "price": "3.90",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -1608,10 +1607,10 @@
    "pack_unit": "g",
    "price": "4.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -1629,10 +1628,10 @@
    "pack_unit": "g",
    "price": "4.20",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -1650,10 +1649,10 @@
    "pack_unit": "g",
    "price": "3.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -1671,10 +1670,10 @@
    "pack_unit": "g",
    "price": "3.20",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -1691,10 +1690,10 @@
    "pack_unit": "each",
    "price": "1.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -1711,10 +1710,10 @@
    "pack_unit": "each",
    "price": "1.60",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -1732,10 +1731,10 @@
    "pack_unit": "each",
    "price": "2.80",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -1753,10 +1752,10 @@
    "pack_unit": "each",
    "price": "2.60",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -1773,10 +1772,10 @@
    "pack_unit": "g",
    "price": "3.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -1793,10 +1792,10 @@
    "pack_unit": "g",
    "price": "4.20",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "premium"
+   "quality_band": "premium",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -1813,10 +1812,10 @@
    "pack_unit": "g",
    "price": "3.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -1833,10 +1832,10 @@
    "pack_unit": "g",
    "price": "4.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "premium"
+   "quality_band": "premium",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -1854,10 +1853,10 @@
    "pack_unit": "each",
    "price": "2.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -1875,10 +1874,10 @@
    "pack_unit": "each",
    "price": "2.40",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -1895,10 +1894,10 @@
    "pack_unit": "g",
    "price": "3.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -1915,10 +1914,10 @@
    "pack_unit": "g",
    "price": "3.20",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -1935,10 +1934,10 @@
    "pack_unit": "g",
    "price": "3.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -1955,10 +1954,10 @@
    "pack_unit": "g",
    "price": "3.40",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -1977,10 +1976,10 @@
    "pack_unit": "each",
    "price": "4.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -1999,10 +1998,10 @@
    "pack_unit": "each",
    "price": "4.20",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -2019,10 +2018,10 @@
    "pack_unit": "g",
    "price": "3.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -2039,10 +2038,10 @@
    "pack_unit": "g",
    "price": "3.30",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -2059,10 +2058,10 @@
    "pack_unit": "each",
    "price": "2.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -2079,10 +2078,10 @@
    "pack_unit": "each",
    "price": "2.20",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -2099,10 +2098,10 @@
    "pack_unit": "g",
    "price": "3.90",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -2119,10 +2118,10 @@
    "pack_unit": "g",
    "price": "3.80",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -2140,10 +2139,10 @@
    "pack_unit": "g",
    "price": "4.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -2161,10 +2160,10 @@
    "pack_unit": "g",
    "price": "4.40",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -2181,10 +2180,10 @@
    "pack_unit": "each",
    "price": "1.20",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -2201,10 +2200,10 @@
    "pack_unit": "each",
    "price": "1.10",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -2221,10 +2220,10 @@
    "pack_unit": "each",
    "price": "1.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -2241,10 +2240,10 @@
    "pack_unit": "each",
    "price": "1.10",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -2261,10 +2260,10 @@
    "pack_unit": "each",
    "price": "2.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -2281,10 +2280,10 @@
    "pack_unit": "each",
    "price": "2.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -2301,10 +2300,10 @@
    "pack_unit": "each",
    "price": "2.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -2321,10 +2320,10 @@
    "pack_unit": "each",
    "price": "2.60",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -2341,10 +2340,10 @@
    "pack_unit": "g",
    "price": "2.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -2361,10 +2360,10 @@
    "pack_unit": "g",
    "price": "2.40",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -2383,10 +2382,10 @@
    "pack_unit": "each",
    "price": "2.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -2405,10 +2404,10 @@
    "pack_unit": "each",
    "price": "2.30",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -2424,10 +2423,10 @@
    "pack_unit": "each",
    "price": "3.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -2443,10 +2442,10 @@
    "pack_unit": "each",
    "price": "3.80",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -2463,10 +2462,10 @@
    "pack_unit": "each",
    "price": "4.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -2483,10 +2482,10 @@
    "pack_unit": "each",
    "price": "4.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -2503,10 +2502,10 @@
    "pack_unit": "ml",
    "price": "3.10",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -2523,10 +2522,10 @@
    "pack_unit": "ml",
    "price": "3.90",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -2543,10 +2542,10 @@
    "pack_unit": "ml",
    "price": "4.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "premium"
+   "quality_band": "premium",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -2563,10 +2562,10 @@
    "pack_unit": "ml",
    "price": "3.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -2583,10 +2582,10 @@
    "pack_unit": "ml",
    "price": "3.90",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -2603,10 +2602,10 @@
    "pack_unit": "ml",
    "price": "4.40",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "premium"
+   "quality_band": "premium",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -2623,10 +2622,10 @@
    "pack_unit": "g",
    "price": "4.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -2643,10 +2642,10 @@
    "pack_unit": "g",
    "price": "5.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -2663,10 +2662,10 @@
    "pack_unit": "g",
    "price": "4.40",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -2683,10 +2682,10 @@
    "pack_unit": "g",
    "price": "5.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -2705,10 +2704,10 @@
    "pack_unit": "g",
    "price": "8.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -2727,10 +2726,10 @@
    "pack_unit": "g",
    "price": "9.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -2749,10 +2748,10 @@
    "pack_unit": "g",
    "price": "7.80",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -2771,10 +2770,10 @@
    "pack_unit": "g",
    "price": "9.60",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -2792,10 +2791,10 @@
    "pack_unit": "g",
    "price": "8.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -2813,10 +2812,10 @@
    "pack_unit": "g",
    "price": "9.80",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -2834,10 +2833,10 @@
    "pack_unit": "g",
    "price": "8.80",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -2855,10 +2854,10 @@
    "pack_unit": "g",
    "price": "9.90",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -2876,10 +2875,10 @@
    "pack_unit": "g",
    "price": "4.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -2897,10 +2896,10 @@
    "pack_unit": "g",
    "price": "5.20",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -2918,10 +2917,10 @@
    "pack_unit": "g",
    "price": "4.20",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -2939,10 +2938,10 @@
    "pack_unit": "g",
    "price": "5.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -2960,10 +2959,10 @@
    "pack_unit": "ml",
    "price": "4.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -2981,10 +2980,10 @@
    "pack_unit": "ml",
    "price": "5.40",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -3002,10 +3001,10 @@
    "pack_unit": "ml",
    "price": "4.40",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -3023,10 +3022,10 @@
    "pack_unit": "ml",
    "price": "5.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -3042,10 +3041,10 @@
    "pack_unit": "ml",
    "price": "3.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -3061,10 +3060,10 @@
    "pack_unit": "ml",
    "price": "3.60",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -3080,10 +3079,10 @@
    "pack_unit": "ml",
    "price": "2.90",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -3099,10 +3098,10 @@
    "pack_unit": "ml",
    "price": "3.70",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -3120,10 +3119,10 @@
    "pack_unit": "g",
    "price": "5.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -3141,10 +3140,10 @@
    "pack_unit": "g",
    "price": "6.80",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -3162,10 +3161,10 @@
    "pack_unit": "g",
    "price": "5.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -3183,10 +3182,10 @@
    "pack_unit": "g",
    "price": "7.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -3205,10 +3204,10 @@
    "pack_unit": "each",
    "price": "5.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -3227,10 +3226,10 @@
    "pack_unit": "each",
    "price": "6.20",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -3249,10 +3248,10 @@
    "pack_unit": "each",
    "price": "7.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "premium"
+   "quality_band": "premium",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -3271,10 +3270,10 @@
    "pack_unit": "each",
    "price": "5.20",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -3293,10 +3292,10 @@
    "pack_unit": "each",
    "price": "6.30",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -3315,10 +3314,10 @@
    "pack_unit": "each",
    "price": "7.20",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "premium"
+   "quality_band": "premium",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -3334,10 +3333,10 @@
    "pack_unit": "g",
    "price": "3.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -3353,10 +3352,10 @@
    "pack_unit": "g",
    "price": "4.60",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -3372,10 +3371,10 @@
    "pack_unit": "g",
    "price": "3.60",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -3391,10 +3390,10 @@
    "pack_unit": "g",
    "price": "4.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -3411,10 +3410,10 @@
    "pack_unit": "g",
    "price": "4.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -3431,10 +3430,10 @@
    "pack_unit": "g",
    "price": "5.60",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -3451,10 +3450,10 @@
    "pack_unit": "g",
    "price": "4.80",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -3471,10 +3470,10 @@
    "pack_unit": "g",
    "price": "5.70",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -3492,10 +3491,10 @@
    "pack_unit": "ml",
    "price": "8.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -3513,10 +3512,10 @@
    "pack_unit": "ml",
    "price": "11.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -3534,10 +3533,10 @@
    "pack_unit": "ml",
    "price": "7.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -3555,10 +3554,10 @@
    "pack_unit": "ml",
    "price": "11.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -3576,10 +3575,10 @@
    "pack_unit": "ml",
    "price": "4.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -3597,10 +3596,10 @@
    "pack_unit": "ml",
    "price": "6.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -3618,10 +3617,10 @@
    "pack_unit": "ml",
    "price": "4.60",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -3639,10 +3638,10 @@
    "pack_unit": "ml",
    "price": "6.20",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -3659,10 +3658,10 @@
    "pack_unit": "g",
    "price": "1.20",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -3679,10 +3678,10 @@
    "pack_unit": "g",
    "price": "2.20",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -3699,10 +3698,10 @@
    "pack_unit": "g",
    "price": "1.10",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -3719,10 +3718,10 @@
    "pack_unit": "g",
    "price": "2.30",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -3740,10 +3739,10 @@
    "pack_unit": "g",
    "price": "3.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -3761,10 +3760,10 @@
    "pack_unit": "g",
    "price": "4.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -3782,10 +3781,10 @@
    "pack_unit": "g",
    "price": "3.20",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -3803,10 +3802,10 @@
    "pack_unit": "g",
    "price": "4.10",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -3824,10 +3823,10 @@
    "pack_unit": "g",
    "price": "1.90",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -3845,10 +3844,10 @@
    "pack_unit": "g",
    "price": "2.80",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -3866,10 +3865,10 @@
    "pack_unit": "g",
    "price": "1.80",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -3887,10 +3886,10 @@
    "pack_unit": "g",
    "price": "2.90",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -3907,10 +3906,10 @@
    "pack_unit": "g",
    "price": "2.60",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -3927,10 +3926,10 @@
    "pack_unit": "g",
    "price": "3.40",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -3947,10 +3946,10 @@
    "pack_unit": "g",
    "price": "2.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -3967,10 +3966,10 @@
    "pack_unit": "g",
    "price": "3.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -3988,10 +3987,10 @@
    "pack_unit": "g",
    "price": "2.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "budget"
+   "quality_band": "budget",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -4009,10 +4008,10 @@
    "pack_unit": "g",
    "price": "4.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -4030,10 +4029,10 @@
    "pack_unit": "g",
    "price": "2.40",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "budget"
+   "quality_band": "budget",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -4051,10 +4050,10 @@
    "pack_unit": "g",
    "price": "4.20",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -4072,10 +4071,10 @@
    "pack_unit": "g",
    "price": "1.60",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "budget"
+   "quality_band": "budget",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -4093,10 +4092,10 @@
    "pack_unit": "g",
    "price": "2.80",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -4114,10 +4113,10 @@
    "pack_unit": "g",
    "price": "1.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "budget"
+   "quality_band": "budget",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -4135,10 +4134,10 @@
    "pack_unit": "g",
    "price": "2.90",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -4155,10 +4154,10 @@
    "pack_unit": "g",
    "price": "1.60",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "budget"
+   "quality_band": "budget",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -4175,10 +4174,10 @@
    "pack_unit": "g",
    "price": "2.80",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -4195,10 +4194,10 @@
    "pack_unit": "g",
    "price": "1.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "budget"
+   "quality_band": "budget",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -4215,10 +4214,10 @@
    "pack_unit": "g",
    "price": "2.90",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -4236,10 +4235,10 @@
    "pack_unit": "g",
    "price": "1.10",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "budget"
+   "quality_band": "budget",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -4257,10 +4256,10 @@
    "pack_unit": "g",
    "price": "1.90",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -4278,10 +4277,10 @@
    "pack_unit": "g",
    "price": "1.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "budget"
+   "quality_band": "budget",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -4299,10 +4298,10 @@
    "pack_unit": "g",
    "price": "2.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -4319,10 +4318,10 @@
    "pack_unit": "g",
    "price": "1.60",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -4339,10 +4338,10 @@
    "pack_unit": "g",
    "price": "2.30",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -4359,10 +4358,10 @@
    "pack_unit": "g",
    "price": "1.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -4379,10 +4378,10 @@
    "pack_unit": "g",
    "price": "2.40",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -4398,10 +4397,10 @@
    "pack_unit": "g",
    "price": "1.10",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "budget"
+   "quality_band": "budget",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -4417,10 +4416,10 @@
    "pack_unit": "g",
    "price": "2.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -4436,10 +4435,10 @@
    "pack_unit": "g",
    "price": "1.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "budget"
+   "quality_band": "budget",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -4455,10 +4454,10 @@
    "pack_unit": "g",
    "price": "2.10",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -4475,10 +4474,10 @@
    "pack_unit": "g",
    "price": "1.20",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -4495,10 +4494,10 @@
    "pack_unit": "g",
    "price": "1.90",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -4515,10 +4514,10 @@
    "pack_unit": "g",
    "price": "1.10",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -4535,10 +4534,10 @@
    "pack_unit": "g",
    "price": "2.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -4555,10 +4554,10 @@
    "pack_unit": "g",
    "price": "1.20",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -4575,10 +4574,10 @@
    "pack_unit": "g",
    "price": "1.90",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -4595,10 +4594,10 @@
    "pack_unit": "g",
    "price": "1.10",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -4615,10 +4614,10 @@
    "pack_unit": "g",
    "price": "1.90",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -4635,10 +4634,10 @@
    "pack_unit": "ml",
    "price": "2.20",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -4655,10 +4654,10 @@
    "pack_unit": "ml",
    "price": "2.90",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -4675,10 +4674,10 @@
    "pack_unit": "ml",
    "price": "2.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -4695,10 +4694,10 @@
    "pack_unit": "ml",
    "price": "3.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -4715,10 +4714,10 @@
    "pack_unit": "ml",
    "price": "2.40",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -4735,10 +4734,10 @@
    "pack_unit": "ml",
    "price": "3.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -4755,10 +4754,10 @@
    "pack_unit": "ml",
    "price": "2.20",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -4775,10 +4774,10 @@
    "pack_unit": "ml",
    "price": "3.60",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -4795,10 +4794,10 @@
    "pack_unit": "ml",
    "price": "2.40",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -4815,10 +4814,10 @@
    "pack_unit": "ml",
    "price": "3.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -4835,10 +4834,10 @@
    "pack_unit": "ml",
    "price": "2.30",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -4855,10 +4854,10 @@
    "pack_unit": "ml",
    "price": "3.60",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -4875,10 +4874,10 @@
    "pack_unit": "ml",
    "price": "2.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -4895,10 +4894,10 @@
    "pack_unit": "ml",
    "price": "3.30",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -4915,10 +4914,10 @@
    "pack_unit": "ml",
    "price": "2.40",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -4935,10 +4934,10 @@
    "pack_unit": "ml",
    "price": "3.40",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -4955,10 +4954,10 @@
    "pack_unit": "ml",
    "price": "2.60",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -4975,10 +4974,10 @@
    "pack_unit": "ml",
    "price": "3.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -4995,10 +4994,10 @@
    "pack_unit": "ml",
    "price": "2.40",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -5015,10 +5014,10 @@
    "pack_unit": "ml",
    "price": "3.70",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -5035,10 +5034,10 @@
    "pack_unit": "g",
    "price": "3.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -5055,10 +5054,10 @@
    "pack_unit": "g",
    "price": "4.40",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -5075,10 +5074,10 @@
    "pack_unit": "g",
    "price": "3.20",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -5095,10 +5094,10 @@
    "pack_unit": "g",
    "price": "4.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -5115,10 +5114,10 @@
    "pack_unit": "g",
    "price": "2.80",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -5135,10 +5134,10 @@
    "pack_unit": "g",
    "price": "3.60",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -5155,10 +5154,10 @@
    "pack_unit": "g",
    "price": "2.70",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -5175,10 +5174,10 @@
    "pack_unit": "g",
    "price": "3.70",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -5194,10 +5193,10 @@
    "pack_unit": "g",
    "price": "5.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -5213,10 +5212,10 @@
    "pack_unit": "g",
    "price": "7.20",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -5232,10 +5231,10 @@
    "pack_unit": "g",
    "price": "5.20",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -5251,10 +5250,10 @@
    "pack_unit": "g",
    "price": "7.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -5271,10 +5270,10 @@
    "pack_unit": "g",
    "price": "2.20",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -5291,10 +5290,10 @@
    "pack_unit": "g",
    "price": "3.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -5311,10 +5310,10 @@
    "pack_unit": "g",
    "price": "2.10",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -5331,10 +5330,10 @@
    "pack_unit": "g",
    "price": "3.10",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -5352,10 +5351,10 @@
    "pack_unit": "g",
    "price": "1.80",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -5373,10 +5372,10 @@
    "pack_unit": "g",
    "price": "2.60",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -5394,10 +5393,10 @@
    "pack_unit": "g",
    "price": "1.70",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -5415,10 +5414,10 @@
    "pack_unit": "g",
    "price": "2.60",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -5434,10 +5433,10 @@
    "pack_unit": "g",
    "price": "3.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -5453,10 +5452,10 @@
    "pack_unit": "g",
    "price": "4.60",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -5472,10 +5471,10 @@
    "pack_unit": "g",
    "price": "3.20",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -5491,10 +5490,10 @@
    "pack_unit": "g",
    "price": "4.80",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -5511,10 +5510,10 @@
    "pack_unit": "g",
    "price": "3.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -5531,10 +5530,10 @@
    "pack_unit": "g",
    "price": "3.80",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -5551,10 +5550,10 @@
    "pack_unit": "g",
    "price": "2.90",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -5571,10 +5570,10 @@
    "pack_unit": "g",
    "price": "3.90",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -5591,10 +5590,10 @@
    "pack_unit": "g",
    "price": "3.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -5611,10 +5610,10 @@
    "pack_unit": "g",
    "price": "3.80",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -5631,10 +5630,10 @@
    "pack_unit": "g",
    "price": "3.20",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -5651,10 +5650,10 @@
    "pack_unit": "g",
    "price": "3.80",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -5670,10 +5669,10 @@
    "pack_unit": "g",
    "price": "3.20",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -5689,10 +5688,10 @@
    "pack_unit": "g",
    "price": "3.90",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -5708,10 +5707,10 @@
    "pack_unit": "g",
    "price": "3.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -5727,10 +5726,10 @@
    "pack_unit": "g",
    "price": "4.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -5748,10 +5747,10 @@
    "pack_unit": "g",
    "price": "3.20",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -5769,10 +5768,10 @@
    "pack_unit": "g",
    "price": "4.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -5790,10 +5789,10 @@
    "pack_unit": "g",
    "price": "3.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -5811,10 +5810,10 @@
    "pack_unit": "g",
    "price": "4.40",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -5832,10 +5831,10 @@
    "pack_unit": "g",
    "price": "1.30",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -5853,10 +5852,10 @@
    "pack_unit": "g",
    "price": "2.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -5874,10 +5873,10 @@
    "pack_unit": "g",
    "price": "1.20",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -5895,10 +5894,10 @@
    "pack_unit": "g",
    "price": "2.10",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -5916,10 +5915,10 @@
    "pack_unit": "g",
    "price": "2.80",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -5937,10 +5936,10 @@
    "pack_unit": "g",
    "price": "3.80",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -5958,10 +5957,10 @@
    "pack_unit": "g",
    "price": "2.60",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -5979,10 +5978,10 @@
    "pack_unit": "g",
    "price": "3.90",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -6000,10 +5999,10 @@
    "pack_unit": "g",
    "price": "3.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -6021,10 +6020,10 @@
    "pack_unit": "g",
    "price": "4.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -6042,10 +6041,10 @@
    "pack_unit": "g",
    "price": "2.90",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -6063,10 +6062,10 @@
    "pack_unit": "g",
    "price": "4.10",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -6084,10 +6083,10 @@
    "pack_unit": "each",
    "price": "3.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -6105,10 +6104,10 @@
    "pack_unit": "each",
    "price": "3.80",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -6126,10 +6125,10 @@
    "pack_unit": "each",
    "price": "3.20",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -6147,10 +6146,10 @@
    "pack_unit": "each",
    "price": "3.90",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -6168,10 +6167,10 @@
    "pack_unit": "each",
    "price": "3.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -6189,10 +6188,10 @@
    "pack_unit": "each",
    "price": "4.20",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -6210,10 +6209,10 @@
    "pack_unit": "each",
    "price": "3.60",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -6231,10 +6230,10 @@
    "pack_unit": "each",
    "price": "4.10",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -6252,10 +6251,10 @@
    "pack_unit": "each",
    "price": "3.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -6273,10 +6272,10 @@
    "pack_unit": "each",
    "price": "3.80",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -6294,10 +6293,10 @@
    "pack_unit": "each",
    "price": "3.10",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -6315,10 +6314,10 @@
    "pack_unit": "each",
    "price": "3.80",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -6336,10 +6335,10 @@
    "pack_unit": "g",
    "price": "5.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -6356,10 +6355,10 @@
    "pack_unit": "g",
    "price": "3.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -6376,10 +6375,10 @@
    "pack_unit": "g",
    "price": "4.80",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -6396,10 +6395,10 @@
    "pack_unit": "g",
    "price": "3.20",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -6416,10 +6415,10 @@
    "pack_unit": "g",
    "price": "4.90",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -6437,10 +6436,10 @@
    "pack_unit": "g",
    "price": "3.60",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -6458,10 +6457,10 @@
    "pack_unit": "g",
    "price": "4.70",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -6479,10 +6478,10 @@
    "pack_unit": "g",
    "price": "3.40",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -6500,10 +6499,10 @@
    "pack_unit": "g",
    "price": "4.80",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -6522,10 +6521,10 @@
    "pack_unit": "g",
    "price": "3.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -6544,10 +6543,10 @@
    "pack_unit": "g",
    "price": "3.00",
    "on_special": true,
-   "special_end_date": "2026-10-18",
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": 6
   },
   {
    "store": "woolworths",
@@ -6566,10 +6565,10 @@
    "pack_unit": "g",
    "price": "3.20",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -6588,10 +6587,10 @@
    "pack_unit": "g",
    "price": "4.80",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -6608,10 +6607,10 @@
    "pack_unit": "g",
    "price": "9.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -6628,10 +6627,10 @@
    "pack_unit": "g",
    "price": "11.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -6648,10 +6647,10 @@
    "pack_unit": "g",
    "price": "8.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -6668,10 +6667,10 @@
    "pack_unit": "g",
    "price": "11.20",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -6688,10 +6687,10 @@
    "pack_unit": "ml",
    "price": "5.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -6708,10 +6707,10 @@
    "pack_unit": "ml",
    "price": "8.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -6728,10 +6727,10 @@
    "pack_unit": "ml",
    "price": "5.20",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -6748,10 +6747,10 @@
    "pack_unit": "ml",
    "price": "8.20",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -6769,10 +6768,10 @@
    "pack_unit": "g",
    "price": "7.00",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -6790,10 +6789,10 @@
    "pack_unit": "g",
    "price": "7.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -6810,10 +6809,10 @@
    "pack_unit": "g",
    "price": "5.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -6830,10 +6829,10 @@
    "pack_unit": "g",
    "price": "6.80",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -6850,10 +6849,10 @@
    "pack_unit": "g",
    "price": "5.20",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -6870,10 +6869,10 @@
    "pack_unit": "g",
    "price": "6.90",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -6890,10 +6889,10 @@
    "pack_unit": "g",
    "price": "3.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -6910,10 +6909,10 @@
    "pack_unit": "g",
    "price": "3.40",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -6930,10 +6929,10 @@
    "pack_unit": "g",
    "price": "4.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -6950,10 +6949,10 @@
    "pack_unit": "g",
    "price": "5.80",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -6970,10 +6969,10 @@
    "pack_unit": "g",
    "price": "4.60",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -6990,10 +6989,10 @@
    "pack_unit": "g",
    "price": "5.90",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -7009,10 +7008,10 @@
    "pack_unit": "each",
    "price": "2.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -7028,10 +7027,10 @@
    "pack_unit": "each",
    "price": "3.50",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -7047,10 +7046,10 @@
    "pack_unit": "each",
    "price": "2.40",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "woolworths",
@@ -7066,10 +7065,10 @@
    "pack_unit": "each",
    "price": "3.60",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   },
   {
    "store": "coles",
@@ -7086,10 +7085,10 @@
    "pack_unit": "g",
    "price": "3.80",
    "on_special": false,
-   "special_end_date": null,
-   "price_timestamp": "2026-10-12T00:00:00+00:00",
    "data_source": "seeded",
-   "quality_band": "standard"
+   "quality_band": "standard",
+   "price_age_days": 0,
+   "special_ends_in_days": null
   }
  ]
 }

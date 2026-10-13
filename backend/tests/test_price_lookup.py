@@ -1,4 +1,5 @@
 import os
+from datetime import date
 from decimal import Decimal
 
 import pytest
@@ -15,7 +16,7 @@ from grocery_planner.tools.price_lookup import (
 
 @pytest.fixture(scope="module")
 def source() -> SeededFilePriceSource:
-    return SeededFilePriceSource()
+    return SeededFilePriceSource(anchor=date(2026, 10, 12))
 
 
 def by_id(source, term, store, pid):
@@ -54,11 +55,25 @@ def test_missing_item_returns_empty(source):
     assert source.search("", Store.COLES, 5) == []
 
 
+def test_named_brand_is_not_cut_off_by_limit(source):
+    # Edge case e: Bellvue is not the cheapest tomato sauce, so limit=1 alone would drop it.
+    cheapest = source.search("tomato sauce", Store.COLES, 1)
+    assert cheapest[0].brand != "Bellvue"
+    hit = source.search("tomato sauce", Store.COLES, 1, brand="bellvue")
+    assert [p.product_id for p in hit] == ["col-tomato-sauce-02"]
+    other = source.search("tomato sauce", Store.WOOLWORTHS, 1, brand=" BELLVUE ")
+    assert [p.product_id for p in other] == ["wol-tomato-sauce-02"]
+    assert source.search("tomato sauce", Store.COLES, 5, brand="Nope") == []
+
+
 @pytest.mark.skipif(not os.getenv("SUPABASE_DB_URL"), reason="SUPABASE_DB_URL not set")
 def test_postgres_source_matches_seeded_source(source):
     pg = PostgresPriceSource(os.environ["SUPABASE_DB_URL"])
     for store in Store:
         assert pg.search("bacon", store, 10) == source.search("bacon", store, 10)
+        assert pg.search("tomato sauce", store, 1, "Bellvue") == source.search(
+            "tomato sauce", store, 1, "Bellvue"
+        )
 
 
 def test_packs_needed_exact_fit(source):

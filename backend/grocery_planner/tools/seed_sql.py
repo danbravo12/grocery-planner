@@ -1,15 +1,18 @@
 """Emit INSERT statements for price_catalogue from the seed JSON.
 
 Usage (from backend/):
-    uv run python -m grocery_planner.tools.seed_sql > ../db/seed/price_catalogue.sql
+    uv run python -m grocery_planner.tools.seed_sql [YYYY-MM-DD] > ../db/seed/price_catalogue.sql
+
+The optional date is the anchor that the seed's relative dates resolve against
+(default: today in Australia/Sydney).
 """
 
-import json
 import sys
+from datetime import date
 from pathlib import Path
 
 from grocery_planner.domain import CatalogueProduct
-from grocery_planner.tools.price_lookup import DEFAULT_SEED_PATH
+from grocery_planner.tools.price_lookup import DEFAULT_SEED_PATH, load_seed_products
 
 _COLUMNS = (
     "store, product_id, product_name, brand, brand_label, category, search_terms, "
@@ -53,12 +56,12 @@ def insert_sql(p: CatalogueProduct) -> str:
     )
 
 
-def seed_sql(path: Path = DEFAULT_SEED_PATH) -> str:
-    products = [
-        CatalogueProduct.model_validate(p) for p in json.loads(path.read_text())["products"]
-    ]
+def seed_sql(path: Path = DEFAULT_SEED_PATH, anchor: date | None = None) -> str:
+    products = load_seed_products(path, anchor)
     return "BEGIN;\n" + "\n".join(insert_sql(p) for p in products) + "\nCOMMIT;\n"
 
 
 if __name__ == "__main__":
-    sys.stdout.write(seed_sql())
+    sys.stdout.write(
+        seed_sql(anchor=date.fromisoformat(sys.argv[1]) if len(sys.argv) > 1 else None)
+    )
