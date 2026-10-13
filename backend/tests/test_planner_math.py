@@ -3,6 +3,7 @@ from decimal import Decimal
 import pytest
 from pydantic import ValidationError
 
+from grocery_planner.config import ACTIVE_STORES
 from grocery_planner.domain import PlannerConfig, PricedItem, Store
 from grocery_planner.tools.planner_math import (
     basket_totals,
@@ -19,7 +20,7 @@ from grocery_planner.tools.planner_math import (
 from tests.helpers import AS_OF, COLES, WOOL, basket_d, fillet, not_found, priced, synthetic
 
 CFG = PlannerConfig()
-BOTH = [COLES, WOOL]
+BOTH = list(ACTIVE_STORES)
 
 
 def D(x: str) -> Decimal:
@@ -32,7 +33,7 @@ def D(x: str) -> Decimal:
 def test_config_defaults():
     c = PlannerConfig()
     assert (c.savings_threshold_dollars, c.savings_threshold_pct) == (D("8"), D("0.08"))
-    assert (c.stop_not_found_pct, c.stop_store_matched_pct, c.pack_size_tolerance) == (
+    assert (c.stop_not_found_pct, c.stop_comparable_pct, c.pack_size_tolerance) == (
         D("0.25"), D("0.50"), D("0.15"),
     )  # fmt: skip
 
@@ -43,7 +44,7 @@ def test_config_defaults():
         ("savings_threshold_dollars", "3", "25", "2.99", "25.01"),
         ("savings_threshold_pct", "0.03", "0.20", "0.029", "0.21"),
         ("stop_not_found_pct", "0.10", "0.40", "0.09", "0.41"),
-        ("stop_store_matched_pct", "0.40", "0.80", "0.39", "0.81"),
+        ("stop_comparable_pct", "0.40", "0.80", "0.39", "0.81"),
         ("pack_size_tolerance", "0.05", "0.25", "0.04", "0.26"),
     ],
 )
@@ -107,6 +108,7 @@ def rows(n_items: int, unmatched_everywhere: int = 0, wool_missing: int = 0) -> 
 def test_coverage_numbers():
     cov = coverage(rows(10, unmatched_everywhere=1, wool_missing=2), BOTH)
     assert cov.total_items == 10
+    assert cov.common_items == [f"i{n}" for n in range(3, 10)]
     assert (cov.per_store[COLES].matched, cov.per_store[COLES].pct) == (9, D("0.9"))
     assert (cov.per_store[WOOL].matched, cov.per_store[WOOL].pct) == (7, D("0.7"))
     assert cov.unmatched_everywhere == ["i0"]
@@ -121,12 +123,31 @@ def test_should_stop_not_found_boundary():
     assert stop and "26 of 100" in reasons[0]
 
 
-def test_should_stop_store_matched_boundary():
-    at = coverage(rows(10, wool_missing=5), BOTH)  # Woolworths exactly 50%
+def test_should_stop_comparable_boundary():
+    at = coverage(rows(10, wool_missing=5), BOTH)  # 5 of 10 usable at both stores = 50%
     assert should_stop(at, CFG) == (False, [])
-    below = coverage(rows(10, wool_missing=6), BOTH)  # 40%
+    below = coverage(rows(10, wool_missing=6), BOTH)  # 4 of 10
     stop, reasons = should_stop(below, CFG)
-    assert stop and "woolworths" in reasons[0]
+    assert stop and reasons[0].startswith("too few comparable items: only 4 of 10")
+
+
+def test_should_stop_when_stores_cover_disjoint_items():
+    items = []
+    for n in range(1, 11):  # Coles usable on 1-5, Woolworths on 6-10
+        items.append(synthetic(f"i{n}", COLES, "5", "equivalent" if n <= 5 else "not_found"))
+        items.append(synthetic(f"i{n}", WOOL, "5", "equivalent" if n > 5 else "not_found"))
+    cov = coverage(items, BOTH)
+    assert cov.per_store[COLES].pct == cov.per_store[WOOL].pct == D("0.5")  # reported only
+    assert cov.unmatched_everywhere == [] and cov.common_items == []
+    assert should_stop(cov, CFG) == (
+        True,
+        ["no comparable items: only 0 of 10 items are usable at every store (0% < 50%)"],
+    )
+
+
+def test_low_single_store_coverage_alone_does_not_stop():
+    # Woolworths matches only 6 of 10 -> fine as long as enough items are comparable.
+    assert should_stop(coverage(rows(10, wool_missing=4), BOTH), CFG) == (False, [])
 
 
 def test_should_stop_respects_config_and_empty_input():

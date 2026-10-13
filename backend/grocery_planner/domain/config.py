@@ -15,7 +15,7 @@ class PlannerConfig(BaseModel):
     stop_not_found_pct: Decimal = Field(
         default=Decimal("0.25"), ge=Decimal("0.10"), le=Decimal("0.40")
     )
-    stop_store_matched_pct: Decimal = Field(
+    stop_comparable_pct: Decimal = Field(
         default=Decimal("0.50"), ge=Decimal("0.40"), le=Decimal("0.80")
     )
     pack_size_tolerance: Decimal = Field(

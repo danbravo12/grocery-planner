@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from grocery_planner.config import ACTIVE_STORES
 from grocery_planner.domain import CatalogueProduct, Store
 from grocery_planner.tools.price_lookup import (
     DEFAULT_SEED_PATH,
@@ -29,7 +30,7 @@ def test_seed_validates_and_is_sane(products):
     assert len(products) >= 250
     ingredients = {p.search_terms[0] for p in products.values()}
     assert len(ingredients) >= 100
-    for store in (Store.COLES, Store.WOOLWORTHS):
+    for store in ACTIVE_STORES:
         per_item: dict[str, int] = {}
         for p in products.values():
             if p.store == store:
@@ -127,3 +128,9 @@ def test_default_anchor_is_today_in_sydney():
 
     default = {p.product_id: p for p in load_seed_products()}
     assert default["wol-chicken-breast-01"].special_end_date == today_sydney() + timedelta(3)
+
+
+def test_active_stores_all_have_seed_products_and_aldi_is_inactive(products):
+    seeded = {p.store for p in products.values()}
+    assert set(ACTIVE_STORES) <= seeded
+    assert Store.ALDI not in ACTIVE_STORES and Store.ALDI not in seeded

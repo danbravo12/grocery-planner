@@ -28,6 +28,7 @@ class StoreCoverage(BaseModel):
 
 class Coverage(BaseModel):
     total_items: int
+    common_items: list[str]  # usable at every store
     per_store: dict[Store, StoreCoverage]
     unmatched_everywhere: list[str]
     missing_by_store: dict[Store, list[str]]
@@ -118,6 +119,7 @@ def coverage(items: Sequence[PricedItem], stores: Sequence[Store]) -> Coverage:
     nowhere = [i for i in by_item if all(i in missing[s] for s in stores)]
     return Coverage(
         total_items=total,
+        common_items=[i for i in by_item if not any(i in missing[s] for s in stores)],
         per_store=per_store,
         unmatched_everywhere=nowhere,
         missing_by_store=missing,
@@ -125,7 +127,8 @@ def coverage(items: Sequence[PricedItem], stores: Sequence[Store]) -> Coverage:
 
 
 def should_stop(cov: Coverage, config: PlannerConfig) -> tuple[bool, list[str]]:
-    """Stop when too much is missing. Exactly at a threshold does not stop."""
+    """Stop when too much is missing, or too little is comparable across stores.
+    Exactly at a threshold does not stop. Per-store coverage is reported, not a stop rule."""
     if cov.total_items == 0:
         return True, ["no items to compare"]
     reasons = []
@@ -135,12 +138,13 @@ def should_stop(cov: Coverage, config: PlannerConfig) -> tuple[bool, list[str]]:
             f"{len(cov.unmatched_everywhere)} of {cov.total_items} items have no usable match "
             f"at any store ({nowhere_pct:.0%} > {config.stop_not_found_pct:.0%})"
         )
-    for store, sc in cov.per_store.items():
-        if sc.pct < config.stop_store_matched_pct:
-            reasons.append(
-                f"{store.value} matched {sc.matched} of {sc.total} items "
-                f"({sc.pct:.0%} < {config.stop_store_matched_pct:.0%})"
-            )
+    comparable_pct = Decimal(len(cov.common_items)) / cov.total_items
+    if comparable_pct < config.stop_comparable_pct:
+        label = "no comparable items" if not cov.common_items else "too few comparable items"
+        reasons.append(
+            f"{label}: only {len(cov.common_items)} of {cov.total_items} items are usable at "
+            f"every store ({comparable_pct:.0%} < {config.stop_comparable_pct:.0%})"
+        )
     return bool(reasons), reasons
 
 
@@ -244,6 +248,8 @@ def rule_verdict(
     if len(stores) < 2:
         raise ValueError("need at least two stores to compare")
     if not common_items(items, stores):
+        # Invariant: should_stop guarantees this never happens (it stops when comparable
+        # items fall below stop_comparable_pct, which is at least 40%).
         raise ValueError("no common items to compare")
     totals = basket_totals(items, stores)
     ranked = sorted(stores, key=lambda s: totals[s])  # stable: ties keep `stores` order

@@ -9,7 +9,6 @@ from grocery_planner.tools.price_lookup import SeededFilePriceSource, packs_need
 AS_OF = date(2026, 10, 12)
 SOURCE = SeededFilePriceSource(anchor=AS_OF)
 COLES, WOOL = Store.COLES, Store.WOOLWORTHS
-PREFIX = {COLES: "col", WOOL: "wol", Store.ALDI: "ald"}
 
 
 def priced(
