@@ -85,19 +85,27 @@ _COLUMNS = (
 
 
 class PostgresPriceSource:
-    """Reads price_catalogue. Rows are fetched per store and matched with the same Python
-    `matches` function as the seeded source, so both sources behave identically."""
+    """Reads price_catalogue through a small connection pool. Rows are fetched per store and
+    matched with the same Python `matches` function as the seeded source, so both sources
+    behave identically."""
 
-    def __init__(self, dsn: str) -> None:
-        self._dsn = dsn
+    def __init__(self, dsn: str, min_size: int = 1, max_size: int = 4) -> None:
+        from psycopg_pool import ConnectionPool
+
+        from grocery_planner.db import CONNECT_KWARGS
+
+        self._pool = ConnectionPool(
+            dsn, min_size=min_size, max_size=max_size, kwargs=CONNECT_KWARGS, open=True
+        )
+        self._pool.wait()
+
+    def close(self) -> None:
+        self._pool.close()
 
     def search(
         self, term: str, store: Store, limit: int, brand: str | None = None
     ) -> list[CatalogueProduct]:
-        import psycopg
-        from psycopg.rows import dict_row
-
-        with psycopg.connect(self._dsn, row_factory=dict_row) as conn:
+        with self._pool.connection() as conn:
             rows = conn.execute(
                 f"SELECT {_COLUMNS} FROM price_catalogue WHERE store = %s", (store.value,)
             ).fetchall()

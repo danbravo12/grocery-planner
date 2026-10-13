@@ -145,9 +145,18 @@ def test_should_stop_when_stores_cover_disjoint_items():
     )
 
 
-def test_low_single_store_coverage_alone_does_not_stop():
-    # Woolworths matches only 6 of 10 -> fine as long as enough items are comparable.
-    assert should_stop(coverage(rows(10, wool_missing=4), BOTH), CFG) == (False, [])
+@pytest.mark.parametrize("wool_missing", range(11))
+def test_store_below_comparable_threshold_always_stops(wool_missing):
+    # Per-store pct and the comparability rule share one denominator (all distinct items),
+    # and common <= every store's matched, so a store under the threshold forces a stop.
+    cov = coverage(rows(10, wool_missing=wool_missing), BOTH)
+    assert all(sc.total == cov.total_items for sc in cov.per_store.values())
+    store_below = any(sc.pct < CFG.stop_comparable_pct for sc in cov.per_store.values())
+    assert len(cov.common_items) <= min(sc.matched for sc in cov.per_store.values())
+    if store_below:
+        assert should_stop(cov, CFG)[0] is True
+    else:
+        assert should_stop(cov, CFG) == (False, [])
 
 
 def test_should_stop_respects_config_and_empty_input():

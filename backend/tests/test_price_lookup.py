@@ -1,13 +1,10 @@
-import os
 from datetime import date
 from decimal import Decimal
 
 import pytest
 
-from grocery_planner.config import ACTIVE_STORES
 from grocery_planner.domain import Store
 from grocery_planner.tools.price_lookup import (
-    PostgresPriceSource,
     SeededFilePriceSource,
     UnitMismatchError,
     pack_size_within_tolerance,
@@ -65,16 +62,6 @@ def test_named_brand_is_not_cut_off_by_limit(source):
     other = source.search("tomato sauce", Store.WOOLWORTHS, 1, brand=" BELLVUE ")
     assert [p.product_id for p in other] == ["wol-tomato-sauce-02"]
     assert source.search("tomato sauce", Store.COLES, 5, brand="Nope") == []
-
-
-@pytest.mark.skipif(not os.getenv("SUPABASE_DB_URL"), reason="SUPABASE_DB_URL not set")
-def test_postgres_source_matches_seeded_source(source):
-    pg = PostgresPriceSource(os.environ["SUPABASE_DB_URL"])
-    for store in ACTIVE_STORES:
-        assert pg.search("bacon", store, 10) == source.search("bacon", store, 10)
-        assert pg.search("tomato sauce", store, 1, "Bellvue") == source.search(
-            "tomato sauce", store, 1, "Bellvue"
-        )
 
 
 def test_packs_needed_exact_fit(source):

@@ -28,7 +28,7 @@ A run moves through three agents in a fixed order, and only the planner can send
 **Stack**
 
 - **Backend:** Python and FastAPI, one background task per run, SSE for progress
-- **Agents:** Gemini 2.5 Flash-Lite (free tier) behind a swappable model layer
+- **Agents:** Gemini 3.5 Flash-Lite (free tier) behind a swappable model layer
 - **Data:** Supabase Postgres
 - **Tracing:** Langfuse, plus step records in the app's own database for the public trace panel
 - **Frontend:** React and Vite
@@ -73,7 +73,7 @@ This agent turns the meal form into one consolidated, quantity-scaled list of pu
 - Avoid is per meal, so the merged list reflects each meal's own constraints.
 - It does not ask clarifying questions. A contradiction (for example avoid: dairy with a creamy potato salad) is resolved by substitution and noted.
 - Unit normalisation is done by the model and noted in the assumptions. There is no unit-conversion tool.
-- Dish expansion is cached per dish (see Data layer), and scaling by people and days stays deterministic.
+- Dish expansion is cached per dish and normalised avoid text, written only after the output passes schema validation (see Data layer), and scaling by people and days stays deterministic.
 
 ## Price agent
 
@@ -81,7 +81,7 @@ This agent finds a comparable product for each purchasable item at each store an
 
 **Input:** the purchasable items list and the stores to check.
 
-**Tool:** one price lookup that returns candidate products for a search term. At first it reads a seeded catalogue of about 100 ingredients. It returns the same fields a live source would, including a price timestamp, so swapping sources later is a config change.
+**Tool:** one price lookup that returns candidate products for a search term. At first it reads a seeded catalogue of about 100 ingredients. It returns the same fields a live source would, including a price timestamp, so swapping sources later is a config change. Seeded specials and price ages are stored relative to an anchor date (default: today), so specials never go stale.
 
 **Judgment calls**
 
@@ -126,7 +126,7 @@ This agent decides where it is worth shopping this week based on savings alone. 
 - Per-item savings between stores
 - What-if split totals, e.g. "meat from store B, everything else from store A"
 
-**Decision rule:** a split only wins if its savings exceed the threshold after accounting for the extra trip. The default is about $8 or 8% of the basket, set in config. Otherwise the result is a single store, or no meaningful difference. If one store is cheaper overall but another is cheaper on one expensive item, the agent only recommends a split when it clears the threshold, and otherwise mentions the item as a tip.
+**Decision rule:** one threshold applies to every outcome: $8 or 8% of the basket, whichever is higher, set in config. A split only wins if its savings meet the threshold after accounting for the extra trip. Otherwise one store wins if its lead over the next cheapest store meets the threshold, and anything less is no meaningful difference. Code computes this rule verdict, and the agent follows it unless it states an override reason. If one store is cheaper overall but another is cheaper on one expensive item, the agent only recommends a split when it clears the threshold, and otherwise mentions the item as a tip.
 
 **Incomplete baskets:** if a store lacks a few items, the planner compares on common items and flags the gap.
 
@@ -152,7 +152,7 @@ The orchestrator runs the three agents in a fixed sequence, with one controlled 
 | --- | --- |
 | A few items missing at one store | Planner runs on common items and flags the gap |
 | More than 25% of items not found at any store | Stop and tell the user |
-| Any store has fewer than 50% of items matched | Stop and tell the user |
+| Fewer than 50% of items comparable across all stores | Stop and tell the user |
 | Transient error (timeout, rate limit) | Automatic retry with backoff before counting as a failure |
 | Item not found | Never retried blindly; this is what the loop-back is for |
 
@@ -171,10 +171,10 @@ The database is Supabase Postgres, with plain SQL so the schema stays portable. 
 | `runs` | Form input, parameters used, each agent's output, status, tokens, cost, latency, Langfuse trace ID | Run page, trace panel, evals |
 | `run_steps` | Per-step records: inputs, outputs, tool calls, tokens, latency | Public trace panel and SSE replay |
 | `price_catalogue` | Store, product, brand, pack size, price, special and end date, timestamp, `data_source` | Seeded prices behind the lookup tool |
-| `dish_cache` | Dish to per-serving ingredients | Avoids repeat LLM calls for the same dish |
+| `dish_cache` | Dish and normalised avoid text to per-serving ingredients | Avoids repeat LLM calls for the same dish |
 | `usage_counters` | Per-visitor and global daily token counts, day-stop flag | Guardrails |
 
-**Caching:** only the dish expansion is cached. The planner's output is never cached, because it depends on prices and parameters. Scaling by people and days is deterministic code.
+**Caching:** only the dish expansion is cached, keyed on the dish plus its normalised avoid text, and a row is written only after the ingredient agent's output passes schema validation. The planner's output is never cached, because it depends on prices and parameters. Scaling by people and days is deterministic code.
 
 **Access:** the browser never talks to Supabase directly. Only the backend does, using the service key. Row Level Security is enabled on every table anyway, so a leaked public key exposes nothing.
 
@@ -260,12 +260,12 @@ Every parameter has a default and a clamped range, and the values used are store
 | --- | --- | --- | --- |
 | Savings threshold for a split | $8 or 8% of the basket, whichever is higher | $3 to $25, or 3% to 20% | Yes |
 | Stop if items not found at any store | 25% | 10% to 40% | Yes |
-| Stop if any store has fewer items matched | 50% | 40% to 80% | Yes |
+| Stop if fewer items are comparable across all stores (`stop_comparable_pct`) | 50% | 40% to 80% | Yes |
 | Pack-size tolerance | 15% | 5% to 25% | Yes |
 | People per meal | None | 1 to 12 | Form field |
 | Days per meal | None | 1 to 14 | Form field |
 | Include pantry staples | Off | On or off | Yes |
-| Model | Gemini 2.5 Flash-Lite, free tier | Swappable | No |
+| Model | Gemini 3.5 Flash-Lite, free tier | Swappable | No |
 | Daily budget | 70% of the binding Gemini limit (requests or tokens per day) | Set once limits are known | No |
 | Daily reset boundary | Midnight Pacific time, matching Google's quota reset | Fixed | No |
 | In-flight buffer | 15% of the daily budget | Fixed | No |
@@ -288,8 +288,8 @@ Every parameter has a default and a clamped range, and the values used are store
 
 ## Open items to decide before building
 
-- [ ] Read the Gemini 2.5 Flash-Lite limits from the AI Studio rate-limit page, then set the daily budget and buffer
-- [ ] Check Google's deprecations page for 2.5 Flash-Lite before building
+- [ ] Read the Gemini 3.5 Flash-Lite limits from the AI Studio rate-limit page, then set the daily budget and buffer
+- [x] Check Google's deprecations page for 2.5 Flash-Lite before building (done: 2.5 is limited to existing users, so the build uses 3.5)
 - [ ] Hosting that allows long-lived streaming responses
 - [ ] Whether the first seeded catalogue covers Aldi or only Coles and Woolworths
 - [ ] The sample run shown on the unavailable-today screen

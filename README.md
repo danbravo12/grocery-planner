@@ -2,7 +2,7 @@
 
 A multi-agent grocery planner: meals in, shopping list, supermarket prices, and a where-to-shop recommendation out. Full design: [docs/Multi-Agent Grocery Planner Design Document.md](docs/Multi-Agent%20Grocery%20Planner%20Design%20Document.md). Choices the design doc left open are logged in [docs/DECISIONS.md](docs/DECISIONS.md).
 
-**Status: step 1 of the build plan.** Scaffold, database schema, seeded price catalogue and the price lookup tool. There are no agents, LLM calls, orchestrator, API endpoints (beyond `GET /health`) or frontend yet.
+**Status: step 3 of the build plan.** Scaffold, database schema and migrations, seeded price catalogue, price lookup (file and Postgres), and the planner's deterministic maths. There are no agents, LLM calls, orchestrator, API endpoints (beyond `GET /health`) or frontend yet.
 
 ## Layout
 
@@ -26,21 +26,30 @@ uv run pytest
 uv run ruff check .
 ```
 
-`PostgresPriceSource` tests are skipped unless `SUPABASE_DB_URL` is set (copy `.env.example` to `.env` and apply `db/migrations/001_init.sql` plus the seed SQL first).
+Tests marked `integration` need a real Postgres and are skipped when `SUPABASE_DB_URL` is not set. To run everything, copy `.env.example` to `backend/.env` (git-ignored) and set `SUPABASE_DB_URL`. To run only the offline tests:
+
+```bash
+uv run pytest -m "not integration"
+```
 
 ## Seeded prices are fictional
 
 Every price in `db/seed/price_catalogue.json` is made up for testing, in AUD, and plausible rather than real. Brand names other than Coles and Woolworths (Kingsway, Harvest Farm, Bellvue, Goldleaf) are invented. Nothing here comes from a supermarket. Every product carries `data_source: "seeded"`. See `db/seed/EDGE_CASES.md` for the deliberate test cases.
 
-## Loading the catalogue into Postgres
+## Database: migrate, seed, integration tests
 
-Seed dates are relative ("special ends in 3 days"), so re-run the loader to refresh them; they resolve against today in Australia/Sydney unless you pass an anchor date.
+With `SUPABASE_DB_URL` set in `backend/.env`:
 
 ```bash
 cd backend
-uv run python -m grocery_planner.tools.seed_sql > ../db/seed/price_catalogue.sql  # optional arg: anchor date YYYY-MM-DD
-psql "$SUPABASE_DB_URL" -f ../db/migrations/001_init.sql -f ../db/seed/price_catalogue.sql
+uv run python -m grocery_planner.db.migrate          # applies db/migrations/*.sql once each, in one transaction
+uv run python -m grocery_planner.db.seed             # upserts the catalogue; optional arg: anchor date YYYY-MM-DD
+uv run pytest -m integration                         # price source equivalence, idempotent migrations, RLS check
 ```
+
+Seed dates are relative ("special ends in 3 days"), so re-run the seed daily to keep specials current; it resolves against today in Australia/Sydney unless you pass an anchor date. The integration tests also run the seed with today's anchor.
+
+To get plain SQL instead: `uv run python -m grocery_planner.tools.seed_sql [anchor] > ../db/seed/price_catalogue.sql`.
 
 ## Known limitation: Supabase free tier pauses
 
