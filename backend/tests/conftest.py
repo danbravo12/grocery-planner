@@ -9,9 +9,12 @@ def pytest_collection_modifyitems(config, items):
         have_db = True
     except RuntimeError:
         have_db = False
-    if have_db:
-        return
-    skip = pytest.mark.skip(reason="SUPABASE_DB_URL not set")
+    markexpr = config.getoption("-m") or ""
+    live_requested = "live" in markexpr and "not live" not in markexpr
+    skip_db = pytest.mark.skip(reason="SUPABASE_DB_URL not set")
+    skip_live = pytest.mark.skip(reason="live tests only run with -m live")
     for item in items:
-        if "integration" in item.keywords:
-            item.add_marker(skip)
+        if "integration" in item.keywords and not have_db:
+            item.add_marker(skip_db)
+        if "live" in item.keywords and not live_requested:
+            item.add_marker(skip_live)

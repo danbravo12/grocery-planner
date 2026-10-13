@@ -28,7 +28,7 @@ A run moves through three agents in a fixed order, and only the planner can send
 **Stack**
 
 - **Backend:** Python and FastAPI, one background task per run, SSE for progress
-- **Agents:** Gemini 3.5 Flash-Lite (free tier) behind a swappable model layer
+- **Agents:** Gemini 3.5 Flash-Lite (free tier) behind a swappable model layer (a thin in-house layer over the google-genai SDK)
 - **Data:** Supabase Postgres
 - **Tracing:** Langfuse, plus step records in the app's own database for the public trace panel
 - **Frontend:** React and Vite
@@ -188,8 +188,8 @@ Guardrails protect the free Gemini quota and keep a single run from costing too 
 
 **Budget and day stop**
 
-- The budget is counted in tokens, not runs, because a five-meal run costs far more than a one-meal run.
-- A run reserves an estimate based on its number of meals when it starts, and releases unused tokens when it finishes. This stops ten simultaneous runs from overshooting the budget.
+- The budget is counted in requests, not runs, because requests per day (500 on the free tier) is the binding limit and a five-meal run sends far more requests than a one-meal run. Tokens are still tracked for cost and traces.
+- A run reserves an estimate based on its number of meals when it starts, and releases unused requests when it finishes. This stops ten simultaneous runs from overshooting the budget.
 - New runs stop at the daily limit minus a buffer. Runs already started can use the buffer to finish.
 - Once the cutoff is hit, the form is replaced by an "unavailable today" message with the reset time and a link to a sample run.
 - If the buffer itself runs out mid-run, that run fails cleanly with a clear message.
@@ -266,10 +266,10 @@ Every parameter has a default and a clamped range, and the values used are store
 | Days per meal | None | 1 to 14 | Form field |
 | Include pantry staples | Off | On or off | Yes |
 | Model | Gemini 3.5 Flash-Lite, free tier | Swappable | No |
-| Daily budget | 70% of the binding Gemini limit (requests or tokens per day) | Set once limits are known | No |
+| Daily budget | 70% of 500 requests/day = 350 requests | Fixed | No |
 | Daily reset boundary | Midnight Pacific time, matching Google's quota reset | Fixed | No |
-| In-flight buffer | 15% of the daily budget | Fixed | No |
-| Retries | 3 attempts, backoff of 1s, 2s, 4s plus jitter, 30s timeout per call | Fixed | No |
+| In-flight buffer | 15% of the daily budget (about 52 requests) | Fixed | No |
+| Retries | 3 attempts in total, backoff of 1s then 2s plus jitter (4s if a fourth attempt is ever allowed), 30s timeout per call | Fixed | No |
 | Schema repair | 1 attempt when an agent's output fails validation | Fixed | No |
 | Loop-back count | 1 | Fixed | No |
 

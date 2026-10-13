@@ -36,6 +36,14 @@ uv run pytest -m "not integration"
 
 Every price in `db/seed/price_catalogue.json` is made up for testing, in AUD, and plausible rather than real. Brand names other than Coles and Woolworths (Kingsway, Harvest Farm, Bellvue, Goldleaf) are invented. Nothing here comes from a supermarket. Every product carries `data_source: "seeded"`. See `db/seed/EDGE_CASES.md` for the deliberate test cases.
 
+## Model layer and live tests
+
+`grocery_planner/llm/` holds a provider-neutral `LLMClient`, a Gemini implementation (`GeminiClient`) and a scripted `FakeLLMClient` for tests. Set `GEMINI_API_KEY` (and optionally `GEMINI_MODEL`, default `gemini-3.5-flash-lite`) in `backend/.env`. Normal test runs never call Gemini. The live smoke test uses a few free-tier requests:
+
+```bash
+uv run pytest -m live -s
+```
+
 ## Database: migrate, seed, integration tests
 
 With `SUPABASE_DB_URL` set in `backend/.env`:
