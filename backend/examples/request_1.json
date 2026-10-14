@@ -1,0 +1,12 @@
+{
+  "meals": [
+    {
+      "meal_name": "Friday dinner",
+      "mains": ["fillet mignon"],
+      "sides": ["potato salad", "fries"],
+      "people": 2,
+      "days": 1
+    }
+  ],
+  "include_pantry_staples": false
+}

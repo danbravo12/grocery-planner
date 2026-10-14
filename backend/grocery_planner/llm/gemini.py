@@ -6,6 +6,7 @@ retries and the schema repair itself.
 """
 
 import json
+import logging
 import random
 import re
 import time
@@ -32,6 +33,9 @@ from grocery_planner.llm.types import (
     Usage,
     execute_tool,
 )
+
+# The SDK warns whenever a reply holds a function call; we read the parts ourselves.
+logging.getLogger("google_genai.types").setLevel(logging.ERROR)
 
 DEFAULT_MODEL = "gemini-3.1-flash-lite"
 DEFAULT_FALLBACK_MODEL = "gemini-3.5-flash-lite"

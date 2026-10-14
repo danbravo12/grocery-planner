@@ -44,6 +44,15 @@ Every price in `db/seed/price_catalogue.json` is made up for testing, in AUD, an
 uv run pytest -m live -s
 ```
 
+## Running a plan from the command line
+
+```bash
+cd backend
+uv run python -m grocery_planner.cli run examples/request_1.json            # stored in Postgres
+uv run python -m grocery_planner.cli run examples/request_2.json --memory   # no database
+```
+Options: `--as-of YYYY-MM-DD` (default today, Sydney), `--bypass-cache` (skip the dish cache), `--seed` (refresh the Postgres catalogue first), `--memory` (in-process store and the seed file). Exit code 0 completed, 1 stopped (too little to compare), 2 failed. A request file is a plan request plus optional `parameters` (savings and stop thresholds).
+
 ## Database: migrate, seed, integration tests
 
 With `SUPABASE_DB_URL` set in `backend/.env`:

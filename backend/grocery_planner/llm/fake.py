@@ -46,7 +46,7 @@ class FakeLLMClient:
         return self.script.pop(0)
 
     def _request(self) -> Usage:
-        delta = Usage(requests=1)
+        delta = Usage(requests=1, model=self.model)
         if self.on_request:
             self.on_request(delta)
         return delta

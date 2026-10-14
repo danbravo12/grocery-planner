@@ -1,0 +1,26 @@
+{
+  "meals": [
+    {
+      "meal_name": "Monday bolognese",
+      "mains": ["spaghetti bolognese"],
+      "people": 4,
+      "days": 3
+    },
+    {
+      "meal_name": "Tuesday chilli",
+      "mains": ["chilli con carne"],
+      "sides": ["steamed rice"],
+      "people": 4,
+      "days": 3
+    },
+    {
+      "meal_name": "Weekend BBQ",
+      "mains": ["creamy potato salad"],
+      "people": 3,
+      "days": 2,
+      "avoid": "dairy"
+    }
+  ],
+  "include_pantry_staples": true,
+  "parameters": { "savings_threshold_dollars": "10" }
+}

@@ -148,7 +148,7 @@ This agent decides where it is worth shopping this week based on savings alone. 
 
 The orchestrator runs the three agents in a fixed sequence, with one controlled loop-back. It is predictable and cheap, and the loop-back keeps it agentic.
 
-**Flow:** ingredient agent, then price agent, then planner. The planner may return low-confidence items to the price agent once.
+**Flow:** ingredient agent, then price agent, then the stop check, then the planner. If the planner returns doubtful items, the price agent re-prices just those (with the planner's hints), the stop check runs again, and the planner runs once more with no further loop-back. Never a third pass.
 
 **Failure handling:** when too much is missing for a comparison to mean anything, the run stops and tells the user. Otherwise it continues.
 
@@ -157,12 +157,15 @@ The orchestrator runs the three agents in a fixed sequence, with one controlled 
 | A few items missing at one store | Planner runs on common items and flags the gap |
 | More than 25% of items not found at any store | Stop and tell the user |
 | Fewer than 50% of items comparable across all stores | Stop and tell the user |
-| Transient error (timeout, rate limit) | Automatic retry with backoff before counting as a failure |
+| Transient error (timeout, rate limit) | Automatic retry with backoff, then one retry on a fallback model, before counting as a failure |
+| Output that fails validation twice, model unavailable, or quota used up | Run fails with a clear message; the ingredient list and every completed step are kept. Daily quota exhaustion is recorded as `daily_quota` for the day-stop logic |
+| Run takes longer than 180 s | Run fails with reason `timeout` |
+| Run stops writing for 5 minutes | A sweep marks it failed (`stale`) |
 | Item not found | Never retried blindly; this is what the loop-back is for |
 
 When a run stops, the user still sees the ingredient list that was built, plus which items failed and why, so they can shop from the list.
 
-**Execution model:** each run is a background task that writes every step to the database. It does not depend on the browser connection, so a closed tab does not abandon a run.
+**Execution model:** each run is a background task that writes every step to the database (steps: ingredient, price, planner, reprice, planner_2, stop) and refreshes a heartbeat as it goes. It does not depend on the browser connection, so a closed tab does not abandon a run. The event stream (`step_started`, `step_completed`, `loopback`, `run_completed`, `run_failed`, which is also used for a stopped run) is derived from the stored run and steps, each event with an increasing number, so a client can reconnect and resume from any point. Before a run starts the orchestrator reserves its worst-case request count (9) with a budget guard and releases it at the end; the guard records every request with the model that served it.
 
 **User-controlled parameters:** the end user can change the savings threshold, stop thresholds and pack-size tolerance in the advanced settings panel. Each has a default and a clamped range. The settings used are stored with each run so results are reproducible. Retry and backoff settings stay developer-side.
 
@@ -172,8 +175,8 @@ The database is Supabase Postgres, with plain SQL so the schema stays portable. 
 
 | Table | Holds | Purpose |
 | --- | --- | --- |
-| `runs` | Form input, parameters used, each agent's output, status, tokens, cost, latency, Langfuse trace ID | Run page, trace panel, evals |
-| `run_steps` | Per-step records: inputs, outputs, tool calls, tokens, latency | Public trace panel and SSE replay |
+| `runs` | Form input, parameters used, each agent's output, status, stop or failure reason, the message shown to the user, models used, requests, tokens, cost, latency, Langfuse trace ID | Run page, trace panel, evals |
+| `run_steps` | Per-step records: step name, inputs, outputs, tool calls, requests, tokens, model and whether the fallback answered, latency, a one-line summary | Public trace panel and SSE replay |
 | `price_catalogue` | Store, product, brand, pack size, price, special and end date, timestamp, `data_source` | Seeded prices behind the lookup tool |
 | `dish_cache` | Dish, normalised avoid text and prompt version to per-serving ingredients | Avoids repeat LLM calls for the same dish |
 | `usage_counters` | Per-visitor and global daily token counts, day-stop flag | Guardrails |

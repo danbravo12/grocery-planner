@@ -118,4 +118,56 @@ def test_answering_model_columns_exist():
         }
     assert cols[("run_steps", "model")] == "text"
     assert cols[("run_steps", "fell_back")] == "boolean"
-    assert cols[("runs", "models")] == "ARRAY"
+    assert cols[("runs", "models_used")] == "ARRAY"
+
+
+def test_orchestrator_writes_runs_and_steps_to_postgres_and_replays_events():
+    from datetime import UTC, datetime, timedelta
+
+    from grocery_planner.db.dish_cache import InMemoryDishCache
+    from grocery_planner.domain import PlannerConfig
+    from grocery_planner.llm import FakeLLMClient
+    from grocery_planner.orchestrator import PostgresRunStore, Runner
+    from tests.test_orchestrator import AS_OF, REQUEST, SOURCE, happy_script, loopback_script
+
+    migrate(db_url())
+    store = PostgresRunStore(db_url())
+    run_ids = []
+    try:
+        for script in (happy_script, loopback_script):
+            runner = Runner(
+                store, lambda on_request, s=script: FakeLLMClient(s(), on_request=on_request),
+                InMemoryDishCache(), SOURCE,
+            )  # fmt: skip
+            run_id = runner.create_run(REQUEST, PlannerConfig(), AS_OF)
+            run_ids.append(run_id)
+            assert store.get_run(run_id).status == "queued"
+            row = runner.run_plan(run_id)
+            assert row.status == "completed" and row.models_used == ["fake-model"]
+            steps = store.get_steps(run_id)
+            assert [s.name for s in steps] == (
+                ["ingredient", "price", "planner"]
+                if script is happy_script
+                else ["ingredient", "price", "planner", "reprice", "planner_2"]
+            )
+            assert all(s.status == "completed" and s.model == "fake-model" for s in steps)
+            assert row.requests == len(steps) and row.loopback_used == (script is loopback_script)
+            assert row.planner_output["summary_line"].startswith("No meaningful difference")
+            events = runner.events(run_id)
+            assert runner.events(run_id, after_seq=3) == events[3:]
+            assert events[-1].type == "run_completed"
+        # the stale sweep, against real timestamps
+        stale = store.create_run({}, {}, 9)
+        run_ids.append(stale)
+        store.update_run(stale, status="running")
+        with psycopg.connect(db_url(), **CONNECT_KWARGS) as conn:
+            conn.execute(
+                "UPDATE runs SET updated_at = now() - interval '6 minutes' WHERE id = %s", (stale,)
+            )
+        runner = Runner(store, lambda on_request: None, InMemoryDishCache(), SOURCE)
+        assert stale in runner.sweep_stale(datetime.now(UTC) + timedelta(seconds=1))
+        assert store.get_run(stale).failure_reason == "stale"
+    finally:
+        with psycopg.connect(db_url(), **CONNECT_KWARGS) as conn:
+            conn.execute("DELETE FROM runs WHERE id = ANY(%s::uuid[])", (run_ids,))
+        store.close()
