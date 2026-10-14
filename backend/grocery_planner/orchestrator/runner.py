@@ -28,15 +28,21 @@ from grocery_planner.domain import PlannerConfig, Store
 from grocery_planner.domain.ingredients import IngredientList
 from grocery_planner.domain.request import PlanRequest
 from grocery_planner.llm.types import (
+    BudgetExhausted,
     LLMClient,
     LLMError,
     LLMUnavailable,
-    OnRequest,
+    ModelHooks,
     QuotaExhausted,
     SchemaValidationFailed,
     Usage,
 )
-from grocery_planner.orchestrator.budget import ESTIMATED_REQUESTS, BudgetGuard, NoopBudgetGuard
+from grocery_planner.orchestrator.budget import (
+    ESTIMATED_REQUESTS,
+    BudgetGuard,
+    BudgetUnavailable,
+    NoopBudgetGuard,
+)
 from grocery_planner.orchestrator.events import events_from_state
 from grocery_planner.orchestrator.models import RunEvent, RunRecord, StepRecord
 from grocery_planner.orchestrator.store import RunStore
@@ -44,7 +50,7 @@ from grocery_planner.tools.planner_math import coverage, should_stop
 from grocery_planner.tools.price_lookup import PriceSource
 
 log = logging.getLogger(__name__)
-LLMFactory = Callable[[OnRequest], LLMClient]
+LLMFactory = Callable[[ModelHooks], LLMClient]
 
 
 @dataclass(frozen=True)
@@ -98,6 +104,22 @@ _LIST_NOTE = " Your ingredient list is below, so you can still shop from it."
 
 def classify_failure(exc: Exception) -> tuple[str, str]:
     """(failure_reason, user message without the list note). Never includes exception text."""
+    if isinstance(exc, BudgetUnavailable):
+        if exc.reason == "busy":
+            return (
+                "busy",
+                "Too many plans are running right now. Please try again in a few minutes.",
+            )
+        return (
+            "day_budget",
+            "The planner has used up today's AI capacity. Please try again after the daily reset.",
+        )
+    if isinstance(exc, BudgetExhausted):
+        return (
+            "budget_exhausted",
+            "Today's AI capacity ran out while this plan was running. "
+            "Please try again after the daily reset.",
+        )
     if isinstance(exc, QuotaExhausted):
         if exc.kind == "per_day":
             return (
@@ -124,8 +146,12 @@ def classify_failure(exc: Exception) -> tuple[str, str]:
 
 def _public_error(exc: Exception) -> str:
     """What goes into run_steps.error (shown on public traces): a class name, never a trace."""
+    if isinstance(exc, BudgetExhausted):
+        return "BudgetExhausted"
     if isinstance(exc, QuotaExhausted):
         return f"QuotaExhausted({exc.kind})"
+    if isinstance(exc, BudgetUnavailable):
+        return f"BudgetUnavailable({exc.reason})"
     if isinstance(exc, (LLMError, RunTimeout)):
         return type(exc).__name__
     return f"internal error ({type(exc).__name__})"
@@ -205,6 +231,7 @@ class Runner:
                 run_id, status="failed", failure_reason="stale", completed_at=now,
                 user_message="This run stopped responding and was closed. Please try again.",
             )  # fmt: skip
+            self.budget.release(run_id)  # give back whatever the dead run had reserved
             swept.append(run_id)
         return swept
 
@@ -221,10 +248,21 @@ class Runner:
             params.get("deadline_seconds", self.settings.deadline_seconds), self._clock
         )
         self.store.update_run(run_id, status="running")
-        self.budget.reserve(run_id, run.estimated_requests)
+        try:
+            self.budget.reserve(run_id, run.estimated_requests)
+        except BudgetUnavailable as exc:  # not admitted: the run never starts
+            self._fail(run_id, exc, deadline)
+            return self.store.get_run(run_id)
         try:
             llm = self._llm_factory(
-                lambda usage: self.budget.record(run_id, usage.model, usage.requests)
+                ModelHooks(
+                    on_request=lambda usage: self.budget.record(
+                        run_id, usage.model, usage.requests
+                    ),
+                    before_request=self.budget.before_request,
+                    fallback_allowed=self.budget.fallback_allowed,
+                    on_quota_exhausted=self.budget.quota_exhausted,
+                )
             )
             self._pipeline(
                 run_id, request, config, as_of, params.get("bypass_cache", False), llm, deadline

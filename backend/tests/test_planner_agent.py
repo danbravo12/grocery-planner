@@ -4,6 +4,7 @@ from decimal import Decimal as D
 import pytest
 
 from grocery_planner.agents.planner import (
+    NO_TOOL_PROMPT,
     SYSTEM_PROMPT,
     Assign,
     PlannerOutput,
@@ -259,7 +260,8 @@ def test_follows_the_verdict_in_one_request():
     assert result.rule_verdict.totals == {COLES: D("37.00"), WOOL: D("36.00")}
     assert (result.model, result.fell_back) == ("fake-model", False)
     call = fake.calls[0]
-    assert call["system"] is SYSTEM_PROMPT and [t.name for t in call["tools"]] == ["what_if_split"]
+    # best_split saves less than the threshold here, so the tool is not offered
+    assert call["system"] is NO_TOOL_PROMPT and call["tools"] is None
     assert json.loads(call["user"])["rule_verdict"]["kind"] == "no_meaningful_difference"
 
 
@@ -292,7 +294,7 @@ def test_never_more_than_two_tool_rounds():
 
 
 def test_tool_errors_go_back_to_the_model():
-    f = load_price_fixture("b")
+    f = split_scenario()
     bad = [("what_if_split", {"assignments": [{"key": "dairy-ish", "store": "woolworths"}]})]
     worse = [("what_if_split", {"assignments": [{"key": "meat", "store": "aldi"}]})]
     result, _ = plan(f, FakeToolCalls([bad, worse], out()))
@@ -461,13 +463,40 @@ def test_invented_amount_triggers_the_one_repair():
     assert result.usage.requests == 2 and result.reasoning == out().reasoning
     repair = h.sent[1]["contents"][-1].parts[0].text
     assert "$4.75" in repair and "not in the input or a tool result" in repair
+    assert h.sent[0]["config"].tools is None  # no split can reach the threshold: no tool offered
+
+
+def test_the_what_if_tool_is_declared_to_gemini_when_a_split_could_win():
+    f = split_scenario()
+    answer = out(recommendation="split", overridden=False).model_dump_json()
+    h = run_gemini([text(answer)])
+    result = run_planner(f.items, h.client, CFG, f.as_of)
+    assert result.recommendation == "split" and result.usage.requests == 1
     cfg = h.sent[0]["config"]
     decl = cfg.tools[0].function_declarations[0]
     assert decl.name == "what_if_split" and cfg.automatic_function_calling.disable is True
     schema = decl.parameters_json_schema
     assert schema["properties"]["assignments"]["type"] == "array"  # a list of pairs, not a map
     assert "additionalProperties" not in json.dumps(schema)
-    assert h.sent[1]["config"].tools is None  # the repair request carries no tools
+
+
+def test_tool_is_offered_only_when_best_split_reaches_the_threshold():
+    cases = [
+        (load_price_fixture("a"), out(), False),
+        (load_price_fixture("c"), out(), False),
+        # one store wins outright, so even the best split saves nothing more
+        (large_gap_scenario(), out(recommendation="one_store", store="woolworths"), False),
+        (split_scenario(), out(recommendation="split"), True),
+    ]
+    for fixture, answer, offered in cases:
+        result, fake = plan(fixture, answer)
+        assert result.usage.requests == 1
+        tools = fake.calls[0]["tools"]
+        assert (tools is not None and [t.name for t in tools] == ["what_if_split"]) is offered
+        assert (fake.calls[0]["system"] is SYSTEM_PROMPT) is offered
+        assert (fake.calls[0]["system"] is NO_TOOL_PROMPT) is not offered
+    assert "what_if_split" not in NO_TOOL_PROMPT
+    assert "do not recommend a split" in NO_TOOL_PROMPT
 
 
 def test_two_bad_answers_raise_schema_validation_failed():
@@ -673,7 +702,7 @@ def test_scenario_g_doubtful_match_drives_the_saving():
 
 def test_prompt_version_and_assumption_rule_in_prompt():
     result, _ = plan(load_price_fixture("a"), out())
-    assert result.prompt_version == "2"
+    assert result.prompt_version == "3"
     assert "Never assume anything about the shopper" in SYSTEM_PROMPT
     assert "tip_minimum_saving" in SYSTEM_PROMPT and "state the date it ends" in SYSTEM_PROMPT
     assert "MUST recommend no_meaningful_difference" in SYSTEM_PROMPT

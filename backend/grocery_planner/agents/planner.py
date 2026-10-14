@@ -31,7 +31,7 @@ from grocery_planner.tools.planner_math import (
 )
 from grocery_planner.tools.price_lookup import specials_ending_within
 
-PLANNER_PROMPT_VERSION = "2"
+PLANNER_PROMPT_VERSION = "3"
 MAX_TOOL_ROUNDS = 2
 TIP_MIN_FRACTION = Decimal("0.25")  # of the savings threshold (default $8 -> $2.00)
 SPECIAL_WINDOW_DAYS = 7
@@ -106,6 +106,17 @@ shopper: not their preferences, convenience, time, travel or choice of store.
 
 Reply with JSON only, matching the required schema.
 """
+
+_TOOL_PARAGRAPH = SYSTEM_PROMPT[
+    SYSTEM_PROMPT.index("The what_if_split tool takes") : SYSTEM_PROMPT.index("Dollar amounts:")
+]
+# Used when the tool is not offered: no split can reach the threshold, so the tool could not
+# change the answer. The model is told so instead of being shown a tool it cannot call.
+NO_TOOL_PROMPT = SYSTEM_PROMPT.replace(
+    _TOOL_PARAGRAPH,
+    "No what-if tool is available for this request: even the best possible split saves less "
+    "than the threshold, so do not recommend a split.\n\n",
+)
 
 
 # ---- result types ----------------------------------------------------------------------------
@@ -793,13 +804,17 @@ def run_planner(
 ) -> PlannerResult:
     facts = build_facts(items, stores, config, as_of)
     tool_amounts: set[Decimal] = set()
-    result = llm.generate_with_tools(
-        SYSTEM_PROMPT,
-        json.dumps(model_input(facts), separators=(",", ":")),
-        output_model(facts, tool_amounts),
-        [_what_if_tool(facts, tool_amounts)],
-        max_tool_rounds=MAX_TOOL_ROUNDS,
-    )
+    user = json.dumps(model_input(facts), separators=(",", ":"))
+    if facts.split.savings >= facts.verdict.threshold:
+        result = llm.generate_with_tools(
+            SYSTEM_PROMPT,
+            user,
+            output_model(facts, tool_amounts),
+            [_what_if_tool(facts, tool_amounts)],
+            max_tool_rounds=MAX_TOOL_ROUNDS,
+        )
+    else:  # best_split cannot reach the threshold, so no split can: the tool could not help
+        result = llm.generate(NO_TOOL_PROMPT, user, output_model(facts, tool_amounts))
     out = result.parsed
     v = facts.verdict
 

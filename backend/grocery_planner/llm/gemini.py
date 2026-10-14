@@ -20,7 +20,9 @@ from google.genai import errors, types
 from pydantic import BaseModel, ValidationError
 
 from grocery_planner.env import getenv
+from grocery_planner.llm.ratelimit import DEFAULT_RATE_LIMITER, RateLimiter
 from grocery_planner.llm.types import (
+    BudgetExhausted,
     LLMError,
     LLMResult,
     LLMUnavailable,
@@ -40,6 +42,21 @@ logging.getLogger("google_genai.types").setLevel(logging.ERROR)
 DEFAULT_MODEL = "gemini-3.1-flash-lite"
 DEFAULT_FALLBACK_MODEL = "gemini-3.5-flash-lite"
 _FROM_ENV: Any = object()  # sentinel: read GEMINI_FALLBACK_MODEL
+_DEFAULT_LIMITER: Any = object()  # sentinel: the shared limiter, for real (non-injected) clients
+
+
+def resolve_models(
+    model: str | None = None, fallback_model: str | None = _FROM_ENV
+) -> tuple[str, str | None]:
+    """(primary, fallback or None), from arguments, then the environment, then defaults."""
+    primary = model or getenv("GEMINI_MODEL") or DEFAULT_MODEL
+    if fallback_model is _FROM_ENV:
+        fallback_model = getenv("GEMINI_FALLBACK_MODEL") or DEFAULT_FALLBACK_MODEL
+        if fallback_model.strip().lower() in ("none", "off", "disabled"):
+            fallback_model = None  # pinned runs, e.g. evals
+    return primary, (None if fallback_model == primary else fallback_model)
+
+
 MAX_ATTEMPTS = 3  # attempts per request, including the first (5xx, per-minute and unknown 429)
 TIMEOUT_ATTEMPTS = 2  # timeouts and 504 DEADLINE_EXCEEDED: fail faster, one retry only
 BACKOFF_SECONDS = (1.0, 2.0)  # before retry n
@@ -94,16 +111,20 @@ class GeminiClient:
         clock: Callable[[], float] = time.perf_counter,
         single_shot: bool = False,
         fallback_model: str | None = _FROM_ENV,
+        before_request: Callable[[str], None] | None = None,
+        fallback_allowed: Callable[[], bool] | None = None,
+        on_quota_exhausted: Callable[[str, str], None] | None = None,
+        rate_limiter: RateLimiter | None = _DEFAULT_LIMITER,
     ) -> None:
-        self.model = model or getenv("GEMINI_MODEL") or DEFAULT_MODEL
-        if fallback_model is _FROM_ENV:
-            fallback_model = getenv("GEMINI_FALLBACK_MODEL") or DEFAULT_FALLBACK_MODEL
-            if fallback_model.strip().lower() in ("none", "off", "disabled"):
-                fallback_model = None  # pinned runs, e.g. evals
-        # None (or the same model) means no fallback. Never used by the single-shot probe.
-        self.fallback_model = (
-            None if single_shot or fallback_model == self.model else fallback_model
-        )
+        self.model, fallback = resolve_models(model, fallback_model)
+        # None means no fallback. Never used by the single-shot probe.
+        self.fallback_model = None if single_shot else fallback
+        self._before_request = before_request
+        self._fallback_allowed = fallback_allowed
+        self._on_quota_exhausted = on_quota_exhausted
+        if rate_limiter is _DEFAULT_LIMITER:  # only real clients share the process-wide limiter
+            rate_limiter = DEFAULT_RATE_LIMITER if genai_client is None else None
+        self._limiter = rate_limiter
         self.thinking_level = thinking_level  # None = leave the model's default
         self._on_request = on_request
         self._sleep = sleep
@@ -192,14 +213,31 @@ class GeminiClient:
         try:
             return attempt(call, start)
         except (LLMUnavailable, QuotaExhausted) as e:
-            if self.fallback_model is None or (
-                isinstance(e, QuotaExhausted) and e.kind != "per_day"
+            self._report_quota(call.model, e)
+            if (
+                self.fallback_model is None
+                or (isinstance(e, QuotaExhausted) and e.kind != "per_day")
+                or (self._fallback_allowed is not None and not self._fallback_allowed())
             ):
                 raise
             reason = "unavailable" if isinstance(e, LLMUnavailable) else "per_day quota"
             call.model, call.fell_back, call.fallback_reason = self.fallback_model, True, reason
             call.tool_calls, call.repair_used = [], False  # the answering run starts clean
-            return attempt(call, start)
+            try:
+                return attempt(call, start)
+            except QuotaExhausted as e2:
+                self._report_quota(call.model, e2)
+                raise
+
+    def _report_quota(self, model: str, exc: Exception) -> None:
+        """Tell the budget layer when Google (not our counter) says a model is out for the day."""
+        if (
+            self._on_quota_exhausted
+            and isinstance(exc, QuotaExhausted)
+            and not isinstance(exc, BudgetExhausted)
+            and exc.kind == "per_day"
+        ):
+            self._on_quota_exhausted(model, "per_day")
 
     # ---- internals ----------------------------------------------------------------------
 
@@ -251,6 +289,10 @@ class GeminiClient:
         attempt = 0
         while True:
             attempt += 1
+            if self._before_request:  # budget: may raise BudgetExhausted
+                self._before_request(call.model)
+            if self._limiter:  # per-minute: waits for a slot, or raises LLMUnavailable
+                self._limiter.acquire(call.model)
             try:
                 response = self._genai.models.generate_content(
                     model=call.model, contents=contents, config=config

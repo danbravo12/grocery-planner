@@ -88,8 +88,8 @@ def happy_script():
 
 
 def factory_for(script_fn, cls=FakeLLMClient):
-    def make(on_request):
-        return cls(script_fn(), on_request=on_request)
+    def make(hooks):
+        return cls(script_fn(), on_request=hooks.on_request, before_request=hooks.before_request)
 
     return make
 
@@ -108,6 +108,15 @@ class Recorder:
 
     def release(self, run_id):
         self.calls.append(("release", run_id))
+
+    def before_request(self, model):
+        pass
+
+    def fallback_allowed(self):
+        return True
+
+    def quota_exhausted(self, model, kind):
+        pass
 
 
 def make_runner(script_fn=happy_script, request=REQUEST, store=None, source=SOURCE, **kw):
@@ -180,20 +189,64 @@ def test_happy_path_stores_every_step_and_fills_the_run_totals():
     assert {k: D(v) for k, v in totals.items()} == {COLES: D("9.50"), WOOL: D("11.00")}
 
 
-def test_planner_tool_calls_are_stored_on_the_step():
+class OverrideSource:
+    """The seed catalogue with a few prices changed, to build a basket where a split pays."""
+
+    def __init__(self, prices: dict[str, str]):
+        self._prices = {k: D(v) for k, v in prices.items()}
+
+    def search(self, term, store, limit, brand=None):
+        return [
+            p.model_copy(update={"price": self._prices.get(p.product_id, p.price)})
+            for p in SOURCE.search(term, store, limit, brand)
+        ]
+
+
+SPLIT_SOURCE = OverrideSource({"wol-eye-fillet-01": "12.00", "wol-bacon-01": "14.30"})
+SPLIT_REQUEST = PlanRequest(
+    meals=[Meal(meal_name="Dinner", mains=["steak and bacon"], people=2, days=1)]
+)
+
+
+def split_script():
+    """Fillet is $10 cheaper at Woolworths, bacon $8.80 cheaper at Coles: Woolworths is cheaper
+    overall by only $1.20 (no one-store win), but splitting saves $8.80, so the planner is
+    offered its what-if tool."""
     from grocery_planner.llm import FakeToolCalls
 
-    def script():
-        s = happy_script()
-        ask = [("what_if_split", {"assignments": [{"key": "meat", "store": "coles"}]})]
-        s[2] = FakeToolCalls([ask], planner())
-        return s
+    ask = [("what_if_split", {"assignments": [{"key": "meat", "store": "coles"}]})]
+    return [
+        ingredients(ing("beef eye fillet", 200), ing("bacon", 125)),
+        prices(
+            ("i1", "col-bacon-01", "wol-bacon-01"),
+            ("i2", "col-eye-fillet-01", "wol-eye-fillet-01"),
+        ),
+        FakeToolCalls([ask], planner(recommendation="split", overridden=False)),
+    ]  # fmt: skip
 
-    runner, store = make_runner(script)
-    run_id, row = run(runner)
+
+def test_planner_tool_calls_are_stored_on_the_step():
+    runner, store = make_runner(split_script, source=SPLIT_SOURCE)
+    run_id, row = run(runner, request=SPLIT_REQUEST)
+    assert row.status == "completed"
     planner_step = store.get_steps(run_id)[2]
     assert planner_step.requests == 2 and planner_step.tool_calls[0]["name"] == "what_if_split"
-    assert row.requests == 4
+    assert row.requests == 4 and row.planner_output["recommendation"] == "split"
+    assert row.planner_output["rule_verdict"]["kind"] == "split"
+
+
+def test_planner_gets_no_tool_when_no_split_can_reach_the_threshold():
+    fakes = []
+
+    def make(hooks):
+        fakes.append(FakeLLMClient(happy_script(), on_request=hooks.on_request))
+        return fakes[-1]
+
+    runner, store = make_runner(llm_factory=make)
+    run_id, row = run(runner)
+    planner_call = fakes[0].calls[2]
+    assert planner_call["tools"] is None and "what_if_split" not in planner_call["system"]
+    assert store.get_steps(run_id)[2].requests == 1 and row.requests == 3
 
 
 # ---- loop-back --------------------------------------------------------------------------------
@@ -213,8 +266,8 @@ def loopback_script(second_planner_rechecks=True):
 def test_loopback_runs_exactly_once_and_the_second_planner_cannot_loop_again():
     fakes = []
 
-    def make(on_request):
-        fakes.append(FakeLLMClient(loopback_script(), on_request=on_request))
+    def make(hooks):
+        fakes.append(FakeLLMClient(loopback_script(), on_request=hooks.on_request))
         return fakes[-1]
 
     runner, store = make_runner(llm_factory=make)
@@ -416,10 +469,12 @@ def test_failure_in_the_loopback_pass_keeps_the_first_planner_result():
 
 
 def gemini_factory(script, **kw):
-    def make(on_request):
+    def make(hooks):
         return GeminiClient(
             genai_client=FakeGenai(list(script)), model="primary", fallback_model="backup",
-            on_request=on_request, sleep=lambda s: None, **kw,
+            on_request=hooks.on_request, before_request=hooks.before_request,
+            fallback_allowed=hooks.fallback_allowed, on_quota_exhausted=hooks.on_quota_exhausted,
+            sleep=lambda s: None, **kw,
         )  # fmt: skip
 
     return make
@@ -494,8 +549,14 @@ class SlowFake(FakeLLMClient):
 def test_deadline_exceeded_fails_the_run_with_timeout_and_keeps_completed_steps():
     clock = Clock()
 
-    def make(on_request):
-        return SlowFake(happy_script(), on_request=on_request, clock=clock, seconds=200.0)
+    def make(hooks):
+        return SlowFake(
+            happy_script(),
+            on_request=hooks.on_request,
+            before_request=hooks.before_request,
+            clock=clock,
+            seconds=200.0,
+        )
 
     runner, store = make_runner(llm_factory=make, clock=clock)
     run_id, row = run(runner)
@@ -510,8 +571,14 @@ def test_deadline_exceeded_fails_the_run_with_timeout_and_keeps_completed_steps(
 def test_deadline_is_configurable_and_recorded_with_the_run():
     clock = Clock()
 
-    def make(on_request):
-        return SlowFake(happy_script(), on_request=on_request, clock=clock, seconds=200.0)
+    def make(hooks):
+        return SlowFake(
+            happy_script(),
+            on_request=hooks.on_request,
+            before_request=hooks.before_request,
+            clock=clock,
+            seconds=200.0,
+        )
 
     runner, _ = make_runner(
         llm_factory=make, clock=clock, settings=RunnerSettings(deadline_seconds=500)
@@ -651,7 +718,7 @@ def test_a_run_started_in_the_background_finishes_without_any_client():
             return super().generate(*a, **kw)
 
     runner, store = make_runner(
-        llm_factory=lambda on_request: Gated(happy_script(), on_request=on_request)
+        llm_factory=lambda hooks: Gated(happy_script(), on_request=hooks.on_request)
     )
     run_id = runner.create_run(REQUEST, PlannerConfig(), AS_OF)
     thread = runner.submit(run_id)

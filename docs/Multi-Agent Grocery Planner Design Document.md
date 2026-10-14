@@ -196,15 +196,18 @@ Guardrails protect the free Gemini quota and keep a single run from costing too 
 **Budget and day stop**
 
 - The budget is counted in requests, not runs, because requests per day (500 on the free tier) is the binding limit and a five-meal run sends far more requests than a one-meal run. Tokens are still tracked for cost and traces.
-- A run reserves an estimate based on its number of meals when it starts, and releases unused requests when it finishes. This stops ten simultaneous runs from overshooting the budget.
-- New runs stop at the daily limit minus a buffer. Runs already started can use the buffer to finish.
+- A run reserves its worst-case request count (9) when it starts, in one atomic database statement, and releases whatever it did not use when it finishes (even if it fails). This stops ten simultaneous runs from overshooting the budget. Counters are kept per model and per Pacific day.
+- New runs are admitted only while used plus reserved plus the new estimate fits under the admission limit: the daily limit minus a 15% buffer (298 of 350). Runs already started can use the buffer to finish, up to the daily limit.
+- The fallback model has its own counter and daily limit. When it is used up, or Google says its daily quota is gone, the fallback is switched off for the rest of the day and calls behave as if none were configured.
+- The day is flagged stopped when the primary can no longer admit runs, or when Google returns a per-day quota error for the primary, whatever our counter says.
+- A per-minute limiter in the model layer (12 requests a minute per model) makes a request wait for a slot, up to 30 seconds, then fails as unavailable.
 - Once the cutoff is hit, the form is replaced by an "unavailable today" message with the reset time and a link to a sample run.
 - If the buffer itself runs out mid-run, that run fails cleanly with a clear message.
 - The internal budget is set below Google's current free-tier limits, which can change. A quota error (429) from Google flips the same day flag. Per-minute limits are watched too, since a burst of users can hit them before the daily limit.
 
-**Per-visitor limits:** with no login, "per user" means an anonymous browser ID in a cookie plus an IP cap. This is not bulletproof, and the README names it as a known limitation.
+**Per-visitor limits:** with no login, "per user" means an anonymous browser ID in a cookie plus an IP cap: 5 runs per visitor and 20 per IP per Pacific day. The IP is stored only as a hash with a salt that changes every day. This is not bulletproof, and the README names it as a known limitation.
 
-**Input validation:** length limits and type checks on every field, and the ranges 1 to 12 people and 1 to 14 days, which also cap the cost of any single run.
+**Input validation:** length limits and type checks on every field, the ranges 1 to 12 people and 1 to 14 days, and at most 20 dishes (mains plus sides) across all meals, which together cap the cost of any single run. The planner's what-if tool is only offered when the best possible split could clear the savings threshold; otherwise it could not change the answer and the planner makes a single plain request.
 
 **Prompt injection:** all form fields are treated as data, never as instructions. Every agent output is validated against its schema, and no agent has a tool that can do anything harmful. A visible "flagged input" path is out of scope for the demo.
 
@@ -261,7 +264,7 @@ On a reconnect, the client reloads the run's stored state and then resumes strea
 
 ## Configuration parameters
 
-Every parameter has a default and a clamped range, and the values used are stored with each run. Only the daily token budget is still open, because it depends on the current Gemini limits.
+Every parameter has a default and a clamped range, and the values used are stored with each run.
 
 | Parameter | Default | Range | User-editable |
 | --- | --- | --- | --- |
@@ -275,7 +278,12 @@ Every parameter has a default and a clamped range, and the values used are store
 | Model | Gemini 3.1 Flash-Lite, free tier | Swappable | No |
 | Daily budget | 70% of 500 requests/day = 350 requests | Fixed | No |
 | Daily reset boundary | Midnight Pacific time, matching Google's quota reset | Fixed | No |
-| In-flight buffer | 15% of the daily budget (about 52 requests) | Fixed | No |
+| In-flight buffer | 15% of the daily budget: new runs are admitted up to 298 requests, in-flight runs can reach 350 | Fixed | No |
+| Fallback model budget | Its own counter, same 350 limit; switched off for the day when used up | Fixed | No |
+| Per-minute limiter | 12 requests per minute per model, wait up to 30 s | Fixed | No |
+| Visitor and IP limits | 5 runs per visitor, 20 per IP, per Pacific day | Fixed | No |
+| Dishes per request | At most 20 (mains plus sides) | Fixed | No |
+| Run deadline | 180 s | Fixed | No |
 | Retries | 20s timeout; timeouts/504 retried once; other transient errors 3 attempts with backoff 1s, 2s plus jitter; 429s honour retryDelay up to 20s | Fixed | No |
 | Schema repair | 1 attempt when an agent's output fails validation | Fixed | No |
 | Loop-back count | 1 | Fixed | No |
@@ -285,7 +293,8 @@ Every parameter has a default and a clamped range, and the values used are store
 | Limitation | Why it exists | What changes at scale |
 | --- | --- | --- |
 | Prices are seeded, not live | Scraping is brittle and may breach store terms | A live source behind the same lookup interface, with freshness checks |
-| Per-visitor limits use a cookie and IP | No accounts, to keep friction low | Authenticated users and per-account quotas |
+| Per-visitor limits use a cookie and IP, and can be bypassed (clear the cookie, change IP) | No accounts, to keep friction low | Authenticated users and per-account quotas |
+| The per-minute limiter lives in one process | Demo scale, one backend | A shared limiter (database or cache) |
 | Default model is 3.1 Flash-Lite, not 3.5 | 3.5 Flash-Lite had a transient outage at build time | the default model is chosen by eval score (step 11); the probe command (`python -m grocery_planner.llm.probe --model gemini-3.5-flash-lite`) re-checks a model with one request |
 | One free-tier model provider | Cost | A swappable model layer already exists; add fallback providers and paid quota |
 | Free-tier quota can run out for the day | Cost | Paid tier, request queue and priority for in-flight runs |

@@ -136,7 +136,7 @@ def test_orchestrator_writes_runs_and_steps_to_postgres_and_replays_events():
     try:
         for script in (happy_script, loopback_script):
             runner = Runner(
-                store, lambda on_request, s=script: FakeLLMClient(s(), on_request=on_request),
+                store, lambda hooks, s=script: FakeLLMClient(s(), on_request=hooks.on_request),
                 InMemoryDishCache(), SOURCE,
             )  # fmt: skip
             run_id = runner.create_run(REQUEST, PlannerConfig(), AS_OF)
@@ -164,10 +164,53 @@ def test_orchestrator_writes_runs_and_steps_to_postgres_and_replays_events():
             conn.execute(
                 "UPDATE runs SET updated_at = now() - interval '6 minutes' WHERE id = %s", (stale,)
             )
-        runner = Runner(store, lambda on_request: None, InMemoryDishCache(), SOURCE)
+        runner = Runner(store, lambda hooks: None, InMemoryDishCache(), SOURCE)
         assert stale in runner.sweep_stale(datetime.now(UTC) + timedelta(seconds=1))
         assert store.get_run(stale).failure_reason == "stale"
     finally:
         with psycopg.connect(db_url(), **CONNECT_KWARGS) as conn:
             conn.execute("DELETE FROM runs WHERE id = ANY(%s::uuid[])", (run_ids,))
+        store.close()
+
+
+def test_the_runner_reserves_and_settles_the_budget_in_postgres():
+    from datetime import UTC, datetime
+
+    from grocery_planner.db.dish_cache import InMemoryDishCache
+    from grocery_planner.domain import PlannerConfig
+    from grocery_planner.guardrails import PostgresDayBudget
+    from grocery_planner.llm import FakeLLMClient
+    from grocery_planner.orchestrator import PostgresRunStore, Runner
+    from tests.test_orchestrator import AS_OF, REQUEST, SOURCE, happy_script
+
+    migrate(db_url())
+    store = PostgresRunStore(db_url())
+    day_now = datetime(2099, 6, 1, 18, 0, tzinfo=UTC)
+    budget = PostgresDayBudget(db_url(), "itest-primary", None, now=lambda: day_now, ip_secret="k")
+    run_ids = []
+
+    def make(hooks):
+        return FakeLLMClient(
+            happy_script(), on_request=hooks.on_request, before_request=hooks.before_request,
+            model="itest-primary",
+        )  # fmt: skip
+
+    try:
+        runner = Runner(store, make, InMemoryDishCache(), SOURCE, budget=budget)
+        run_id = runner.create_run(REQUEST, PlannerConfig(), AS_OF)
+        run_ids.append(run_id)
+        row = runner.run_plan(run_id)
+        assert row.status == "completed"
+        (u,) = budget.snapshot()
+        assert (u.used, u.reserved) == (3, 0)
+        with psycopg.connect(db_url(), **CONNECT_KWARGS) as conn:
+            r = conn.execute(
+                "SELECT reserved_remaining, reservation_day FROM runs WHERE id = %s", (run_id,)
+            ).fetchone()
+        assert r["reserved_remaining"] == 0 and str(r["reservation_day"]) == "2099-06-01"
+    finally:
+        with psycopg.connect(db_url(), **CONNECT_KWARGS) as conn:
+            conn.execute("DELETE FROM usage_counters WHERE day >= '2099-01-01'")
+            conn.execute("DELETE FROM runs WHERE id = ANY(%s::uuid[])", (run_ids,))
+        budget.close()
         store.close()

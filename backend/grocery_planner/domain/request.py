@@ -1,6 +1,15 @@
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
+
+from grocery_planner.config import GUARDRAILS
 
 Text60 = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=60)]
 
@@ -29,3 +38,14 @@ class PlanRequest(BaseModel):
 
     meals: list[Meal] = Field(min_length=1, max_length=7)
     include_pantry_staples: bool = False
+
+    @model_validator(mode="after")
+    def _dish_cap(self) -> "PlanRequest":
+        dishes = sum(len(m.mains) + len(m.sides) for m in self.meals)
+        if dishes > GUARDRAILS.max_dishes:
+            raise ValueError(
+                f"A plan can include at most {GUARDRAILS.max_dishes} dishes in total (mains and "
+                f"sides across all meals); you have {dishes}. Remove some dishes or plan fewer "
+                "meals."
+            )
+        return self

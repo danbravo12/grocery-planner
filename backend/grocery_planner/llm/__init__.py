@@ -1,10 +1,12 @@
 from grocery_planner.llm.fake import FakeLLMClient, FakeToolCalls
 from grocery_planner.llm.gemini import GeminiClient
 from grocery_planner.llm.types import (
+    BudgetExhausted,
     LLMClient,
     LLMError,
     LLMResult,
     LLMUnavailable,
+    ModelHooks,
     OnRequest,
     QuotaExhausted,
     SchemaValidationFailed,
@@ -15,6 +17,8 @@ from grocery_planner.llm.types import (
 )
 
 __all__ = [
+    "BudgetExhausted",
+    "ModelHooks",
     "FakeLLMClient",
     "FakeToolCalls",
     "GeminiClient",

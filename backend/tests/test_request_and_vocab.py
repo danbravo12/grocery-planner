@@ -83,3 +83,23 @@ def test_every_vocabulary_name_is_searchable_in_the_catalogue():
         found = [p for s in ACTIVE_STORES for p in source.search(entry.name, s, 50)]
         assert found, entry.name
         assert all(p.pack_unit == entry.unit for p in found if p.search_terms[0] == entry.name)
+
+
+def test_total_dishes_are_capped_at_twenty():
+    def meals(n_dishes):
+        out, left = [], n_dishes
+        while left > 0:
+            mains = min(4, left)
+            sides = min(4, left - mains)
+            out.append(meal(meal_name=f"m{len(out)}", mains=["x"] * mains, sides=["y"] * sides))
+            left -= mains + sides
+        return out
+
+    assert sum(len(m.mains) + len(m.sides) for m in PlanRequest(meals=meals(20)).meals) == 20
+    with pytest.raises(ValidationError) as e:
+        PlanRequest(meals=meals(21))
+    message = str(e.value)
+    assert "at most 20 dishes in total" in message and "you have 21" in message
+    # the per-field caps still apply on their own
+    with pytest.raises(ValidationError):
+        meal(mains=["a"] * 5)

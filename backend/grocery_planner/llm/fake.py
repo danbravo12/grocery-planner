@@ -1,5 +1,6 @@
 """Scripted LLMClient for agent unit tests. No network, same interface as GeminiClient."""
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -34,6 +35,7 @@ class FakeLLMClient:
 
     script: list[Any]
     on_request: OnRequest | None = None
+    before_request: Callable[[str], None] | None = None  # may raise, like the budget check
     model: str = "fake-model"
     calls: list[dict[str, Any]] = field(default_factory=list)  # what the agent sent
 
@@ -46,6 +48,8 @@ class FakeLLMClient:
         return self.script.pop(0)
 
     def _request(self) -> Usage:
+        if self.before_request:
+            self.before_request(self.model)
         delta = Usage(requests=1, model=self.model)
         if self.on_request:
             self.on_request(delta)

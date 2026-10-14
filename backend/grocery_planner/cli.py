@@ -34,21 +34,31 @@ def load_request(path: Path) -> tuple[PlanRequest, PlannerConfig]:
 
 def build_runner(args: argparse.Namespace, as_of: date) -> Runner:
     from grocery_planner.db.dish_cache import InMemoryDishCache
+    from grocery_planner.guardrails import InMemoryDayBudget
     from grocery_planner.llm import GeminiClient
+    from grocery_planner.llm.gemini import resolve_models
     from grocery_planner.tools.price_lookup import SeededFilePriceSource
 
-    def llm_factory(on_request):
-        return GeminiClient(on_request=on_request)
+    def llm_factory(hooks):
+        return GeminiClient(
+            on_request=hooks.on_request,
+            before_request=hooks.before_request,
+            fallback_allowed=hooks.fallback_allowed,
+            on_quota_exhausted=hooks.on_quota_exhausted,
+        )
 
+    primary, fallback = resolve_models()
     if args.memory:
         return Runner(
             InMemoryRunStore(),
             llm_factory,
             InMemoryDishCache(),
             SeededFilePriceSource(anchor=as_of),
+            budget=InMemoryDayBudget(primary, fallback),
         )
     from grocery_planner.db import db_url
     from grocery_planner.db.dish_cache import PostgresDishCache
+    from grocery_planner.guardrails import PostgresDayBudget
     from grocery_planner.orchestrator import PostgresRunStore
     from grocery_planner.tools.price_lookup import PostgresPriceSource
 
@@ -58,8 +68,29 @@ def build_runner(args: argparse.Namespace, as_of: date) -> Runner:
         print(f"seeded {seed(db_url(), as_of)} products (anchor {as_of})")
     url = db_url()
     return Runner(
-        PostgresRunStore(url), llm_factory, PostgresDishCache(url), PostgresPriceSource(url)
+        PostgresRunStore(url),
+        llm_factory,
+        PostgresDishCache(url),
+        PostgresPriceSource(url),
+        budget=PostgresDayBudget(url, primary, fallback),
     )
+
+
+def render_budget(budget) -> str:
+    """The day's counters per model, and whether the service is available."""
+    lines = ["BUDGET (requests, Pacific day)"]
+    for u in budget.snapshot():
+        stop = f"  STOPPED ({u.stop_reason})" if u.day_stopped else ""
+        lines.append(
+            f"  {u.model:<26} used {u.used:>3}  reserved {u.reserved:>2}  "
+            f"admission limit {u.admission_limit}  daily limit {u.daily_limit}{stop}"
+        )
+    a = budget.availability()
+    lines.append(
+        f"  availability: {'available' if a.available else 'UNAVAILABLE (' + str(a.reason) + ')'}"
+        f"   resets {a.reset_at_utc:%Y-%m-%d %H:%M} UTC / {a.reset_at_sydney:%Y-%m-%d %H:%M} Sydney"
+    )
+    return "\n".join(lines)
 
 
 # ---- rendering (from the stored run, as plain data) ---------------------------------------------
@@ -183,10 +214,17 @@ def main(argv: list[str] | None = None, runner_factory: RunnerFactory = build_ru
     as_of = args.as_of or today_sydney()
     request, config = load_request(args.request)
     runner = runner_factory(args, as_of)
+    availability = runner.budget.availability() if hasattr(runner.budget, "availability") else None
+    if availability is not None and not availability.available:
+        print(availability.message)
+        print(render_budget(runner.budget))
+        return 3
     run_id = runner.create_run(request, config, as_of, bypass_cache=args.bypass_cache)
     print(f"run {run_id} created; running...", flush=True)
     record = runner.run_plan(run_id)
     print(render(record, runner.store.get_steps(run_id)))
+    if hasattr(runner.budget, "snapshot"):
+        print("\n" + render_budget(runner.budget))
     return {"completed": 0, "stopped": 1}.get(record.status, 2)
 
 

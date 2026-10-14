@@ -51,7 +51,7 @@ cd backend
 uv run python -m grocery_planner.cli run examples/request_1.json            # stored in Postgres
 uv run python -m grocery_planner.cli run examples/request_2.json --memory   # no database
 ```
-Options: `--as-of YYYY-MM-DD` (default today, Sydney), `--bypass-cache` (skip the dish cache), `--seed` (refresh the Postgres catalogue first), `--memory` (in-process store and the seed file). Exit code 0 completed, 1 stopped (too little to compare), 2 failed. A request file is a plan request plus optional `parameters` (savings and stop thresholds).
+The CLI refuses to start (exit code 3) when the day's AI budget is used up, and prints the per-model counters after every run. Options: `--as-of YYYY-MM-DD` (default today, Sydney), `--bypass-cache` (skip the dish cache), `--seed` (refresh the Postgres catalogue first), `--memory` (in-process store and the seed file). Exit code 0 completed, 1 stopped (too little to compare), 2 failed, 3 unavailable today. A request file is a plan request plus optional `parameters` (savings and stop thresholds).
 
 ## Database: migrate, seed, integration tests
 
@@ -71,3 +71,8 @@ To get plain SQL instead: `uv run python -m grocery_planner.tools.seed_sql [anch
 ## Known limitation: Supabase free tier pauses
 
 Free Supabase projects can pause after inactivity. A keep-alive ping against `/health` (plus a cheap DB query) is planned; check Supabase's current free-tier terms before launch.
+
+## Known limitations
+
+- Per-visitor limits (5 runs per visitor and 20 per IP per Pacific day) rely on a cookie and an IP, so they can be bypassed by clearing the cookie or changing IP. There are no accounts.
+- The per-minute request limiter lives in one process; running several backend processes would multiply the limit.

@@ -27,6 +27,15 @@ class QuotaExhausted(LLMError):
         self.kind = kind
 
 
+class BudgetExhausted(QuotaExhausted):
+    """Our own daily request budget for a model is used up (not Google's quota). It behaves like
+    a per-day quota error, so the model layer falls back to the other model when it can."""
+
+    def __init__(self, model: str, message: str = "") -> None:
+        super().__init__("per_day", message or f"daily request budget used up for {model}")
+        self.model = model
+
+
 class SchemaValidationFailed(LLMError):
     def __init__(self, raw_outputs: list[str], errors: list[str]) -> None:
         super().__init__("model output failed schema validation after one repair attempt")
@@ -68,6 +77,16 @@ class Usage:
 
 
 OnRequest = Callable[[Usage], None]  # called once per request actually sent, with its delta
+
+
+@dataclass
+class ModelHooks:
+    """What the budget layer plugs into a model client."""
+
+    on_request: OnRequest | None = None  # after every request actually sent
+    before_request: Callable[[str], None] | None = None  # (model) before a send; may raise
+    fallback_allowed: Callable[[], bool] | None = None  # False: act as if no fallback is set
+    on_quota_exhausted: Callable[[str, str], None] | None = None  # (model, kind) from Google
 
 
 @dataclass(frozen=True)
