@@ -28,10 +28,13 @@ from grocery_planner.llm.types import LLMClient, Usage
 from grocery_planner.tools.price_lookup import (
     PriceSource,
     UnitMismatchError,
-    pack_comparable,
+    pack_gap_exceeds,
     packs_needed,
     special_active,
 )
+
+# Bump when SYSTEM_PROMPT or the output schema changes; recorded on every result for traces.
+PRICE_PROMPT_VERSION = "2"
 
 CANDIDATES_PER_SEARCH = 5
 MAX_RETRY_TERMS = 2
@@ -48,9 +51,10 @@ Each item has: item_id, name, quantity, unit, brand (the brand the shopper asked
 optionally a hint from the planner about a doubtful earlier match, and "stores": for each store a \
 list of candidates. Each candidate has: candidate_id, product_name, brand, brand_label \
 (house_brand or branded), quality_band (budget, standard or premium), pack, price, unit_price \
-(per 100 g or 100 ml, or per item), packs (packs to buy), total_cost (cost of the packs actually \
-bought), within_tolerance (pack size close enough to the need to compare on unit price), \
-on_special, and ends_in_days (days until an active special ends, otherwise null).
+(per 100 g or 100 ml, or per item), packs (packs to buy), purchased_qty (packs x pack size), \
+leftover (purchased_qty minus the quantity needed; it is shown but never credited), total_cost \
+(cost of the packs actually bought), on_special, and ends_in_days (days until an active special \
+ends, otherwise null).
 
 For every item, return one pick for EVERY store listed under it:
 - candidate_id: copied exactly from that store's candidates, or null. Never invent a product or \
@@ -68,8 +72,10 @@ counts: a popular brand on special can beat the house brand. Compare total_cost 
 and do not pick a premium product over a standard one just because it is premium. Candidates \
 that are a different kind of food (for example coconut milk when the item is milk) are not \
 acceptable.
-- Prefer candidates with within_tolerance true. If only out-of-tolerance candidates are \
-acceptable, pick the closest one and use tier substitute.
+- Pack size never decides the tier. The tier depends only on the product: its type of food, its \
+quality band, and (for exact) its brand. Between equally suitable products prefer the lower \
+total_cost, and if costs are close prefer the smaller leftover. Code compares purchased \
+quantities across stores afterwards and flags big gaps, so you do not need to.
 - exact means the very same branded product (same brand) at every store. equivalent means a \
 comparable product of the same type and quality band. substitute means the closest alternative \
 when nothing comparable exists. not_found means no acceptable candidate: use candidate_id null.
@@ -117,13 +123,14 @@ class Downgrade(BaseModel):
 class PriceFlag(BaseModel):
     item_id: str
     store: Store | None
-    kind: str  # invented_candidate, no_pick, tolerance, exact_downgraded, tier_gap, no_candidates
+    kind: str  # invented_candidate, no_pick, exact_downgraded, tier_gap, pack_gap
     message: str
 
 
 class PriceAgentResult(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
+    prompt_version: str = PRICE_PROMPT_VERSION
     items: list[PricedItem]  # one per item per store, in item then store order
     usage: Usage
     rounds: int  # model calls made: 1, or 2 when a retry round ran
@@ -140,7 +147,8 @@ class Candidate:
     product: CatalogueProduct
     packs: int
     total_cost: Decimal
-    within_tolerance: bool
+    purchased_qty: Decimal
+    leftover_qty: Decimal
     on_special: bool  # a special that is still active on as_of
     ends_in_days: int | None
 
@@ -177,7 +185,7 @@ def find_candidates(
             if product.product_id in seen:
                 continue
             try:
-                packs, total, _ = packs_needed(item.quantity, item.unit, product)
+                packs, total, leftover = packs_needed(item.quantity, item.unit, product)
             except UnitMismatchError:
                 continue
             active = special_active(product, as_of)
@@ -185,9 +193,8 @@ def find_candidates(
                 product=product,
                 packs=packs,
                 total_cost=total,
-                within_tolerance=pack_comparable(
-                    item.quantity, product, config.pack_size_tolerance
-                ),
+                purchased_qty=packs * product.pack_size,
+                leftover_qty=leftover,
                 on_special=active,
                 ends_in_days=(product.special_end_date - as_of).days
                 if active and product.special_end_date
@@ -209,7 +216,8 @@ def _candidate_json(c: Candidate) -> dict:
         "unit_price": str(p.unit_price),
         "packs": c.packs,
         "total_cost": str(c.total_cost),
-        "within_tolerance": c.within_tolerance,
+        "purchased_qty": f"{c.purchased_qty.normalize():f} {c.product.pack_unit}",
+        "leftover": f"{c.leftover_qty.normalize():f} {c.product.pack_unit}",
         "on_special": c.on_special,
         "ends_in_days": c.ends_in_days,
     }
@@ -289,7 +297,7 @@ def _run(
                 for st, need in retry:
                     _apply(st, need, second.get(st.item.item_id), acc, keep_existing=True)
     for st in states:
-        _cross_store(st, stores, acc)
+        _cross_store(st, stores, acc, config.pack_size_tolerance)
     return PriceAgentResult(
         items=[_priced(st, store, as_of) for st in states for store in stores],
         usage=acc.usage,
@@ -375,18 +383,7 @@ def _enforce_pick(st: _State, store: Store, pick: PickOut, acc: _Acc) -> _Pick:
             item_id, store, pick.tier, "not_found", "tier given without a candidate", "no_pick"
         )
         return _Pick(None, "not_found", "low", pick.reason)
-    tier = pick.tier
-    if tier in USABLE and not chosen.within_tolerance:
-        acc.downgrade(
-            item_id,
-            store,
-            tier,
-            "substitute",
-            f"{chosen.product.product_name} is outside the pack-size tolerance for "
-            f"{st.item.quantity.normalize():f} {st.item.unit}",
-            "tolerance",
-        )
-        tier = "substitute"
+    tier = pick.tier  # pack size never changes the tier
     return _Pick(chosen, tier, pick.confidence, pick.reason)
 
 
@@ -423,17 +420,13 @@ def _prepare_retry(
     return retry
 
 
-def _cross_store(st: _State, stores: Sequence[Store], acc: _Acc) -> None:
+def _cross_store(st: _State, stores: Sequence[Store], acc: _Acc, tolerance: Decimal) -> None:
     item_id = st.item.item_id
     exact = [s for s in stores if st.picks[s].tier == "exact"]
     if exact:
         picks = [st.picks[s] for s in stores]
         same_brand = len({p.candidate.product.brand.lower() for p in picks if p.candidate}) == 1
-        ok = (
-            all(p.candidate for p in picks)
-            and same_brand
-            and all(p.candidate.within_tolerance for p in picks if p.candidate)
-        )
+        ok = all(p.candidate for p in picks) and same_brand
         if not ok:
             for s in exact:
                 st.picks[s].tier = "equivalent"
@@ -442,9 +435,22 @@ def _cross_store(st: _State, stores: Sequence[Store], acc: _Acc) -> None:
                     s,
                     "exact",
                     "equivalent",
-                    "exact needs the same brand, within pack-size tolerance, at every store",
+                    "exact needs the same brand at every store",
                     "exact_downgraded",
                 )
+    usable = {s: st.picks[s].candidate for s in stores if st.picks[s].tier in USABLE}
+    quantities = {s: c.purchased_qty for s, c in usable.items() if c}
+    if pack_gap_exceeds(list(quantities.values()), tolerance):
+        unit = st.item.unit
+        shown = ", ".join(f"{s.value} {q.normalize():f} {unit}" for s, q in quantities.items())
+        acc.flags.append(
+            PriceFlag(
+                item_id=item_id,
+                store=None,
+                kind="pack_gap",
+                message=f"purchased quantities differ by more than {tolerance:.0%}: {shown}",
+            )
+        )
     chosen = [st.picks[s].candidate.product for s in stores if st.picks[s].candidate]
     if len(chosen) > 1 and (
         len({p.brand_label for p in chosen}) > 1 or len({p.quality_band for p in chosen}) > 1
@@ -487,6 +493,8 @@ def _priced(st: _State, store: Store, as_of: date) -> PricedItem:
         on_special=p.on_special,
         special_end_date=p.special_end_date,
         packs_needed=pick.candidate.packs,
+        purchased_qty=pick.candidate.purchased_qty,
+        leftover_qty=pick.candidate.leftover_qty,
         total_cost=pick.candidate.total_cost,
         price_timestamp=p.price_timestamp,
         data_source=p.data_source,

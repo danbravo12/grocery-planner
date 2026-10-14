@@ -20,6 +20,8 @@ _PRODUCT_FIELDS = (
     "price",
     "unit_price",
     "packs_needed",
+    "purchased_qty",
+    "leftover_qty",
     "total_cost",
     "price_timestamp",
     "data_source",
@@ -46,13 +48,23 @@ class PricedItem(BaseModel):
     on_special: bool = False
     special_end_date: date | None = None
     packs_needed: int | None = None
+    purchased_qty: Decimal | None = None  # packs_needed x pack_size
+    leftover_qty: Decimal | None = None  # purchased_qty - needed; shown, never credited
     total_cost: Decimal | None = None
     match_tier: MatchTier
     match_confidence: MatchConfidence
     price_timestamp: datetime | None = None
     data_source: Literal["seeded"] | None = None
 
-    @field_validator("pack_size", "price", "unit_price", "total_cost", mode="before")
+    @field_validator(
+        "pack_size",
+        "price",
+        "unit_price",
+        "total_cost",
+        "purchased_qty",
+        "leftover_qty",
+        mode="before",
+    )
     @classmethod
     def _no_floats(cls, v: object) -> object:
         if isinstance(v, float):

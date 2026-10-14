@@ -366,3 +366,29 @@ def test_three_store_support():
     assert (v.split_total, v.split_savings) == (D("44"), D("14"))  # a@aldi 9, b@wool 15, c@coles 20
     assert v.kind == "split" and v.assignment == {"a": A, "b": WOOL, "c": COLES}
     assert [x.item_id for x in v.item_savings] == ["b", "c", "a"]
+
+
+# ---- pack gap ---------------------------------------------------------------------------------
+
+
+def test_pack_gap_flag_in_per_item_savings():
+    items = [
+        priced("yoghurt", COLES, "yoghurt", "col-yoghurt-01"),  # buys 1000 g
+        priced("yoghurt", WOOL, "yoghurt", "wol-yoghurt-01"),  # buys 700 g: 43% apart
+        priced("spag", COLES, "spaghetti", "col-spaghetti-01"),  # 500 g
+        priced("spag", WOOL, "spaghetti", "wol-spaghetti-01"),  # 450 g: 11% apart
+    ]
+    flags = {s.item_id: s.pack_gap_flag for s in per_item_savings(items, BOTH, AS_OF)}
+    assert flags == {"yoghurt": True, "spag": False}
+    loose = {s.item_id: s.pack_gap_flag for s in per_item_savings(items, BOTH, AS_OF, D("0.5"))}
+    assert loose == {"yoghurt": False, "spag": False}
+
+
+def test_rule_verdict_uses_the_configured_pack_tolerance():
+    items = [
+        priced("spag", COLES, "spaghetti", "col-spaghetti-01"),
+        priced("spag", WOOL, "spaghetti", "wol-spaghetti-01"),
+    ]
+    assert rule_verdict(items, BOTH, CFG, AS_OF).item_savings[0].pack_gap_flag is False
+    tight = PlannerConfig(pack_size_tolerance="0.05")
+    assert rule_verdict(items, BOTH, tight, AS_OF).item_savings[0].pack_gap_flag is True

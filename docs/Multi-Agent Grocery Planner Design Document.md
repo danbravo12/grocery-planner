@@ -83,7 +83,7 @@ This agent finds a comparable product for each purchasable item at each store an
 
 **Tool:** one price lookup that returns candidate products for a search term. At first it reads a seeded catalogue of about 100 ingredients. It returns the same fields a live source would, including a price timestamp, so swapping sources later is a config change. Seeded specials and price ages are stored relative to an anchor date (default: today), so specials never go stale.
 
-**Flow:** code pre-fetches up to five candidates per item per store (only the named brand when the user named one) and computes packs, total cost, unit price, pack-size tolerance and whether a special is active. One batched model call then picks a candidate per item per store, or none, with a tier and confidence. Code enforces the tier rules afterwards, downgrading and flagging any pick that breaks them. If a store had no usable pick and the model suggested search terms, there is one retry round (a single extra model call). The planner's loop-back reuses the same machinery.
+**Flow:** code pre-fetches up to five candidates per item per store (only the named brand when the user named one) and computes packs, purchased quantity, leftover, total cost, unit price and whether a special is active. One batched model call then picks a candidate per item per store, or none, with a tier and confidence. Code enforces the tier rules afterwards, downgrading and flagging any pick that breaks them. If a store had no usable pick and the model suggested search terms, there is one retry round (a single extra model call). The planner's loop-back reuses the same machinery.
 
 **Judgment calls**
 
@@ -99,7 +99,7 @@ This agent finds a comparable product for each purchasable item at each store an
 - **Generic item ("bacon"):** pick the best-value acceptable product at each store, branded or house brand, from products of the same type and a comparable quality band. A popular brand on special can beat the house brand.
 - Each pick is labelled house brand, branded, or on special.
 - The agent flags when a price gap comes from a tier difference rather than the store's pricing, so savings are not fake.
-- **Pack-size tolerance:** products within 15% of the needed size are comparable on unit price, with the difference flagged. Beyond that, the product is a substitute.
+- **Pack-size tolerance:** pack size never changes a match tier, which depends only on the product (type, quality band, and brand for exact). Instead, code compares the quantities each store's pick makes you buy (packs × pack size): if they differ by more than 15% (relative to the smaller), the item gets a `pack_gap` flag carrying both quantities. Leftover is shown, not credited.
 
 **Match tiers per item per store**
 
@@ -263,7 +263,7 @@ Every parameter has a default and a clamped range, and the values used are store
 | Savings threshold for a split | $8 or 8% of the basket, whichever is higher | $3 to $25, or 3% to 20% | Yes |
 | Stop if items not found at any store | 25% | 10% to 40% | Yes |
 | Stop if fewer items are comparable across all stores (`stop_comparable_pct`) | 50% | 40% to 80% | Yes |
-| Pack-size tolerance | 15% | 5% to 25% | Yes |
+| Pack-size tolerance (purchased quantities across stores, raises a `pack_gap` flag, never changes the tier) | 15% | 5% to 25% | Yes |
 | People per meal | None | 1 to 12 | Form field |
 | Days per meal | None | 1 to 14 | Form field |
 | Include pantry staples | Off | On or off | Yes |

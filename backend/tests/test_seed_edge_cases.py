@@ -11,7 +11,8 @@ from grocery_planner.tools.price_lookup import (
     DEFAULT_SEED_PATH,
     SeededFilePriceSource,
     load_seed_products,
-    pack_size_within_tolerance,
+    pack_gap_exceeds,
+    packs_needed,
     special_active,
     specials_ending_within,
 )
@@ -52,13 +53,25 @@ def test_a_item_missing_at_one_store():
     )
 
 
-def test_b_pack_size_mismatches(products):
-    col, wol = products["col-spaghetti-01"], products["wol-spaghetti-01"]
-    assert (col.pack_size, wol.pack_size) == (500, 450)
-    assert pack_size_within_tolerance(col.pack_size, wol.pack_size)
-    col, wol = products["col-yoghurt-01"], products["wol-yoghurt-01"]
-    assert (col.pack_size, wol.pack_size) == (1000, 700)
-    assert not pack_size_within_tolerance(col.pack_size, wol.pack_size)
+def test_b_purchased_quantities_across_stores(products):
+    def purchased(pid, needed):
+        p = products[pid]
+        return packs_needed(Decimal(needed), p.pack_unit, p)[0] * p.pack_size
+
+    # needing 400 g of spaghetti: one 500 g pack vs one 450 g pack (11% apart): within
+    spag = [purchased("col-spaghetti-01", 400), purchased("wol-spaghetti-01", 400)]
+    assert spag == [500, 450] and not pack_gap_exceeds(spag)
+    # needing 1 kg of yoghurt: one 1000 g pack vs two 700 g packs (1400 g, 40% apart): beyond
+    yog = [purchased("col-yoghurt-01", 1000), purchased("wol-yoghurt-01", 1000)]
+    assert yog == [1000, 1400] and pack_gap_exceeds(yog)
+
+
+def test_count_based_packs_have_their_typical_count(products):
+    for store in ("col", "wol"):
+        assert products[f"{store}-spring-onion-01"].pack_size == 6
+        assert products[f"{store}-celery-01"].pack_size == 10
+        assert products[f"{store}-corn-cobs-01"].pack_size == 4
+        assert products[f"{store}-eggs-01"].pack_size == 12
 
 
 def test_c_special_ending_mid_week(products):

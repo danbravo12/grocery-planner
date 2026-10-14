@@ -11,7 +11,11 @@ from typing import Literal
 from pydantic import BaseModel
 
 from grocery_planner.domain import PlannerConfig, PricedItem, Store
-from grocery_planner.tools.price_lookup import specials_ending_within
+from grocery_planner.tools.price_lookup import (
+    DEFAULT_TOLERANCE,
+    pack_gap_exceeds,
+    specials_ending_within,
+)
 
 USABLE_TIERS = {"exact", "equivalent"}
 SPECIAL_WINDOW_DAYS = 7
@@ -41,6 +45,7 @@ class ItemSaving(BaseModel):
     cheapest_store: Store
     saving: Decimal  # most expensive store's cost minus the cheapest's
     tier_gap_flag: bool
+    pack_gap_flag: bool  # purchased quantities differ across stores by more than the tolerance
     special_flag: bool
 
 
@@ -166,7 +171,10 @@ def basket_totals(items: Sequence[PricedItem], stores: Sequence[Store]) -> dict[
 
 
 def per_item_savings(
-    items: Sequence[PricedItem], stores: Sequence[Store], as_of: date
+    items: Sequence[PricedItem],
+    stores: Sequence[Store],
+    as_of: date,
+    pack_tolerance: Decimal = DEFAULT_TOLERANCE,
 ) -> list[ItemSaving]:
     """One entry per common item, biggest saving first (ties by item id)."""
     by_item = _by_item(items, stores)
@@ -185,6 +193,9 @@ def per_item_savings(
                 saving=max(costs.values()) - costs[cheapest],
                 tier_gap_flag=len({p.brand_label for p in rows}) > 1
                 or len({p.match_tier for p in rows}) > 1,
+                pack_gap_flag=pack_gap_exceeds(
+                    [p.purchased_qty for p in rows if p.purchased_qty is not None], pack_tolerance
+                ),
                 special_flag=bool(
                     specials_ending_within([picks[cheapest]], as_of, SPECIAL_WINDOW_DAYS)
                 ),
@@ -273,5 +284,5 @@ def rule_verdict(
         threshold=threshold,
         split_total=split.total,
         split_savings=split.savings,
-        item_savings=per_item_savings(items, stores, as_of),
+        item_savings=per_item_savings(items, stores, as_of, config.pack_size_tolerance),
     )

@@ -2379,7 +2379,7 @@
   {
    "store": "coles",
    "product_id": "col-spring-onion-01",
-   "product_name": "Coles Spring Onion Bunch each",
+   "product_name": "Coles Spring Onion Bunch 6 pack",
    "brand": "Coles",
    "brand_label": "house_brand",
    "category": "produce",
@@ -2389,7 +2389,7 @@
     "shallots",
     "green onion"
    ],
-   "pack_size": "1",
+   "pack_size": "6",
    "pack_unit": "each",
    "price": "2.50",
    "on_special": false,
@@ -2401,7 +2401,7 @@
   {
    "store": "woolworths",
    "product_id": "wol-spring-onion-01",
-   "product_name": "Woolworths Spring Onion Bunch each",
+   "product_name": "Woolworths Spring Onion Bunch 6 pack",
    "brand": "Woolworths",
    "brand_label": "house_brand",
    "category": "produce",
@@ -2411,7 +2411,7 @@
     "shallots",
     "green onion"
    ],
-   "pack_size": "1",
+   "pack_size": "6",
    "pack_unit": "each",
    "price": "2.30",
    "on_special": false,
@@ -2423,14 +2423,14 @@
   {
    "store": "coles",
    "product_id": "col-celery-01",
-   "product_name": "Coles Celery Bunch each",
+   "product_name": "Coles Celery Bunch 10 pack",
    "brand": "Coles",
    "brand_label": "house_brand",
    "category": "produce",
    "search_terms": [
     "celery"
    ],
-   "pack_size": "1",
+   "pack_size": "10",
    "pack_unit": "each",
    "price": "3.50",
    "on_special": false,
@@ -2442,14 +2442,14 @@
   {
    "store": "woolworths",
    "product_id": "wol-celery-01",
-   "product_name": "Woolworths Celery Bunch each",
+   "product_name": "Woolworths Celery Bunch 10 pack",
    "brand": "Woolworths",
    "brand_label": "house_brand",
    "category": "produce",
    "search_terms": [
     "celery"
    ],
-   "pack_size": "1",
+   "pack_size": "10",
    "pack_unit": "each",
    "price": "3.80",
    "on_special": false,

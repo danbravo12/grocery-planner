@@ -65,16 +65,23 @@ def report(label, items, result, seconds):
             cost = format_money(r.total_cost) if r.total_cost is not None else "-"
             product = r.product_name or "(none)"
             special = f" special->{r.special_end_date}" if r.on_special else ""
+            qty = (
+                f"bought={r.purchased_qty.normalize():f}{r.pack_unit} "
+                f"left={r.leftover_qty.normalize():f}{r.pack_unit}"
+                if r.purchased_qty is not None
+                else "-"
+            )
             print(
-                f"    {store.value:<10} {product:<42} {r.match_tier:<10} {r.match_confidence:<6} "
-                f"packs={r.packs_needed or '-'} cost={cost}{special}"
+                f"    {store.value:<10} {product:<40} {r.match_tier:<10} {r.match_confidence:<6} "
+                f"packs={r.packs_needed or '-'} {qty} cost={cost}{special}"
             )
             print(f"               reason: {result.reasons[it.item_id][store.value]}")
+        for f in (f for f in result.flags if f.item_id == it.item_id):
+            print(f"    FLAG {f.kind}: {f.message}")
     print(
         "downgrades:",
         [(d.item_id, d.store.value, d.from_tier, d.to_tier) for d in result.downgrades],
     )
-    print("flags:", [(f.item_id, f.store.value if f.store else None, f.kind) for f in result.flags])
     cov = coverage(result.items, ACTIVE_STORES)
     stop, reasons = should_stop(cov, CFG)
     print("coverage:", {s.value: f"{c.matched}/{c.total}" for s, c in cov.per_store.items()},
@@ -135,7 +142,7 @@ def test_c_edge_cases(llm, source):
         )  # fmt: skip
 
     items = [
-        item(1, "sourdough", 600), item(2, "potato gems", 1000), item(3, "spaghetti", 500),
+        item(1, "sourdough", 600), item(2, "potato gems", 1000), item(3, "spaghetti", 400),
         item(4, "yoghurt", 1000), item(5, "bacon", 250),
         item(6, "tomato sauce", 500, "ml", brand="Bellvue"), item(7, "chicken breast", 1000),
         item(8, "milk", 2000, "ml"), item(9, "bread", 700), item(10, "eggs", 12, "each"),

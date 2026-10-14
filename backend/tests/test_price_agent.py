@@ -3,6 +3,7 @@ from datetime import date
 from decimal import Decimal as D
 
 from grocery_planner.agents.price import (
+    PRICE_PROMPT_VERSION,
     SYSTEM_PROMPT,
     ItemOut,
     MatchBatch,
@@ -15,7 +16,7 @@ from grocery_planner.domain import PlannerConfig, Store
 from grocery_planner.domain.ingredients import IngredientItem
 from grocery_planner.llm import FakeLLMClient
 from grocery_planner.tools.planner_math import coverage, rule_verdict, should_stop
-from grocery_planner.tools.price_lookup import SeededFilePriceSource, pack_comparable
+from grocery_planner.tools.price_lookup import SeededFilePriceSource, pack_gap_exceeds
 
 AS_OF = date(2026, 10, 12)
 SOURCE = SeededFilePriceSource(anchor=AS_OF)
@@ -98,7 +99,8 @@ def test_model_input_contains_priced_candidates_as_data():
     special = coles["col-bacon-02"]
     assert special["on_special"] is True and special["ends_in_days"] == 6
     assert special["total_cost"] == "4.50" and special["packs"] == 1
-    assert special["within_tolerance"] is True and special["brand_label"] == "branded"
+    assert "within_tolerance" not in special and special["brand_label"] == "branded"
+    assert (special["purchased_qty"], special["leftover"]) == ("250 g", "0 g")
     assert coles["col-bacon-01"]["ends_in_days"] is None
     assert coles["col-bacon-01"]["quality_band"] == "standard" and special["pack"] == "250 g"
     assert fake.calls[0]["system"] is SYSTEM_PROMPT
@@ -241,26 +243,90 @@ def test_named_brand_exact_at_both_stores_is_kept():
     assert payload(fake)["items"][0]["brand"] == "Bellvue"
 
 
-def test_out_of_tolerance_pick_is_capped_at_substitute():
-    items = [item("i1", "yoghurt", 1000)]
+def test_pack_size_never_changes_the_tier():
+    items = [item("i1", "yoghurt", 1000)]  # Coles sells 1000 g, Woolworths 700 g (so 2 packs)
     result, _ = price(
         items, batch(entry("i1", ("col-yoghurt-01", "equivalent"), ("wol-yoghurt-01", "exact")))
     )
     assert row(result, "i1", COLES).match_tier == "equivalent"
     wool = row(result, "i1", WOOL)
-    assert (wool.match_tier, wool.pack_size, wool.packs_needed) == ("substitute", D(700), 2)
+    # exact is only downgraded because the brands differ, not because of the pack size
+    assert wool.match_tier == "equivalent"
     assert [(d.store, d.from_tier, d.to_tier) for d in result.downgrades] == [
-        (WOOL, "exact", "substitute")
+        (WOOL, "exact", "equivalent")
     ]
-    assert any(f.kind == "tolerance" for f in result.flags)
+    assert result.downgrades[0].reason.startswith("exact needs the same brand")
+    kept, _ = price(
+        [item("i1", "yoghurt", 1000)],
+        batch(entry("i1", ("col-yoghurt-01", "equivalent"), ("wol-yoghurt-01", "equivalent"))),
+    )
+    assert {r.match_tier for r in kept.items} == {"equivalent"} and kept.downgrades == []
 
 
-def test_a_model_substitute_stays_a_substitute_without_a_downgrade():
+def test_purchased_quantity_and_leftover_are_on_the_rows_and_in_the_prompt():
+    items = [item("i1", "yoghurt", 1000)]
+    result, fake = price(
+        items,
+        batch(entry("i1", ("col-yoghurt-01", "equivalent"), ("wol-yoghurt-01", "equivalent"))),
+    )
+    wool = row(result, "i1", WOOL)
+    assert (wool.packs_needed, wool.purchased_qty, wool.leftover_qty) == (2, D(1400), D(400))
+    coles = row(result, "i1", COLES)
+    assert (coles.purchased_qty, coles.leftover_qty, coles.total_cost) == (D(1000), D(0), D("5.50"))
+    sent = payload(fake)["items"][0]["stores"]["woolworths"][0]
+    assert (sent["purchased_qty"], sent["leftover"], sent["packs"]) == ("1400 g", "400 g", 2)
+    assert result.prompt_version == PRICE_PROMPT_VERSION and "pack_gap" not in SYSTEM_PROMPT
+
+
+def test_pack_gap_flag_when_purchased_quantities_differ_beyond_tolerance():
+    result, _ = price(
+        [item("i1", "yoghurt", 1000)],
+        batch(entry("i1", ("col-yoghurt-01", "equivalent"), ("wol-yoghurt-01", "equivalent"))),
+    )
+    (flag,) = [f for f in result.flags if f.kind == "pack_gap"]
+    assert flag.item_id == "i1" and flag.store is None
+    assert "coles 1000 g" in flag.message and "woolworths 1400 g" in flag.message
+    assert result.downgrades == []
+
+
+def test_no_pack_gap_when_purchased_quantities_are_within_tolerance():
+    # needing 400 g: Coles buys one 500 g pack, Woolworths one 450 g pack (11% apart)
+    result, _ = price(
+        [item("i1", "spaghetti", 400)],
+        batch(entry("i1", ("col-spaghetti-01", "equivalent"), ("wol-spaghetti-01", "equivalent"))),
+    )
+    assert [f.kind for f in result.flags] == []
+    assert row(result, "i1", COLES).leftover_qty == D(100)
+    assert row(result, "i1", WOOL).leftover_qty == D(50)
+    # the same two products when 500 g is needed: Woolworths needs two packs (900 g vs 500 g)
+    wide, _ = price(
+        [item("i1", "spaghetti", 500)],
+        batch(entry("i1", ("col-spaghetti-01", "equivalent"), ("wol-spaghetti-01", "equivalent"))),
+    )
+    assert [f.kind for f in wide.flags] == ["pack_gap"]
+
+
+def test_pack_gap_ignores_substitute_and_missing_picks():
     result, _ = price(
         [item("i1", "yoghurt", 1000)],
         batch(entry("i1", ("col-yoghurt-01", "equivalent"), ("wol-yoghurt-01", "substitute"))),
     )
-    assert row(result, "i1", WOOL).match_tier == "substitute" and result.downgrades == []
+    assert [f.kind for f in result.flags] == []  # a substitute is already excluded from totals
+    one_sided, _ = price(
+        [item("i1", "yoghurt", 1000)], batch(entry("i1", ("col-yoghurt-01", "equivalent"), None))
+    )
+    assert [f.kind for f in one_sided.flags] == []
+
+
+def test_pack_gap_tolerance_comes_from_config():
+    fake = FakeLLMClient(
+        [batch(entry("i1", ("col-yoghurt-01", "equivalent"), ("wol-yoghurt-01", "equivalent")))]
+    )
+    loose = PlannerConfig(pack_size_tolerance="0.25")  # 1400 vs 1000 is 40% apart: still a gap
+    assert any(
+        f.kind == "pack_gap"
+        for f in price_items([item("i1", "yoghurt", 1000)], fake, SOURCE, loose, AS_OF).flags
+    )
 
 
 def test_tier_gap_flag_when_label_or_band_differ():
@@ -294,17 +360,16 @@ def test_item_text_is_data_in_the_payload():
     assert "DATA" in SYSTEM_PROMPT
 
 
-# ---- pack tolerance helper -------------------------------------------------------------------
+# ---- pack gap helper -------------------------------------------------------------------------
 
 
-def test_pack_comparable_single_and_multi_pack():
-    prod = {p.product_id: p for s in ACTIVE_STORES for p in SOURCE.search("spaghetti", s, 9)}
-    spag450 = prod["wol-spaghetti-01"]
-    assert pack_comparable(500, spag450) is True  # 10% off one pack
-    assert pack_comparable(400, prod["col-spaghetti-01"]) is False  # 25% over, single pack
-    assert pack_comparable(3000, prod["col-spaghetti-01"]) is True  # six 500 g packs, no waste
-    assert pack_comparable(3100, prod["col-spaghetti-01"]) is True  # 400 g left over = 12.9%
-    assert pack_comparable(2100, prod["col-spaghetti-01"]) is False  # 400 g left over = 19%
+def test_pack_gap_exceeds_boundaries():
+    assert pack_gap_exceeds([D(500), D(575)]) is False  # exactly 15% apart is within
+    assert pack_gap_exceeds([D(500), D("575.01")]) is True
+    assert pack_gap_exceeds([D(575), D(500)]) is False  # order does not matter
+    assert pack_gap_exceeds([D(500)]) is False and pack_gap_exceeds([]) is False
+    assert pack_gap_exceeds([D(100), D(100), D(131)], D("0.30")) is True  # smallest is the base
+    assert pack_gap_exceeds([D(100), D(129)], D("0.30")) is False
 
 
 # ---- seed edge cases end to end --------------------------------------------------------------
@@ -314,7 +379,7 @@ def test_seed_edge_cases_with_a_scripted_model():
     items = [
         item("i1", "sourdough", 600),
         item("i2", "potato gems", 1000),
-        item("i3", "spaghetti", 500),
+        item("i3", "spaghetti", 400),
         item("i4", "yoghurt", 1000),
         item("i5", "bacon", 250),
         item("i6", "tomato sauce", 500, "ml", brand="Bellvue"),
@@ -338,12 +403,19 @@ def test_seed_edge_cases_with_a_scripted_model():
     # a) one store only
     assert tiers[("i1", "coles")] == "not_found" and tiers[("i1", "woolworths")] == "equivalent"
     assert tiers[("i2", "coles")] == "equivalent" and tiers[("i2", "woolworths")] == "not_found"
-    # b) pack sizes: 450 g for a 500 g need is comparable (costs two packs); 700 g for 1000 g is not
+    # b) purchased quantities: spaghetti 500 g vs 450 g (11% apart) is fine; yoghurt 1 kg vs
+    #    1.4 kg (two 700 g packs) is a pack_gap. The tier is equivalent either way.
     spag = row(result, "i3", WOOL)
-    assert (spag.match_tier, spag.packs_needed, spag.total_cost) == ("equivalent", 2, D("3.00"))
+    assert (spag.match_tier, spag.packs_needed, spag.total_cost) == ("equivalent", 1, D("1.50"))
     yog = row(result, "i4", WOOL)
-    assert (yog.match_tier, yog.packs_needed, yog.total_cost) == ("substitute", 2, D("10.00"))
+    assert (yog.match_tier, yog.purchased_qty, yog.total_cost) == (
+        "equivalent",
+        D(1400),
+        D("10.00"),
+    )
     assert row(result, "i4", COLES).match_tier == "equivalent"
+    gaps = [f for f in result.flags if f.kind == "pack_gap"]
+    assert [f.item_id for f in gaps] == ["i4"]
     # f) branded special beats the house brand; the tier difference is flagged
     bacon = row(result, "i5", COLES)
     assert (bacon.product_id, bacon.total_cost, bacon.on_special) == (
@@ -362,20 +434,22 @@ def test_seed_edge_cases_with_a_scripted_model():
         next(c for c in wool_cands if c["candidate_id"] == "wol-chicken-breast-01")["ends_in_days"]
         == 3
     )
-    # only the downgrade we expect: yoghurt out of tolerance
-    assert [(d.item_id, d.store, d.to_tier) for d in result.downgrades] == [
-        ("i4", WOOL, "substitute")
-    ]
+    assert result.downgrades == []  # nothing in the script broke a rule
 
     # the rows feed the planner maths directly
     cov = coverage(result.items, ACTIVE_STORES)
-    assert cov.missing_by_store[COLES] == ["i1"] and cov.missing_by_store[WOOL] == [
-        "i2",
-        "i4",
-    ]  # i4: substitute
-    assert set(cov.common_items) == {"i3", "i5", "i6", "i7"}  # yoghurt is only a substitute
+    assert cov.missing_by_store[COLES] == ["i1"] and cov.missing_by_store[WOOL] == ["i2"]
+    assert set(cov.common_items) == {"i3", "i4", "i5", "i6", "i7"}
     stop, _ = should_stop(cov, CFG)
     assert stop is False
     verdict = rule_verdict(result.items, ACTIVE_STORES, CFG, AS_OF)
-    assert verdict.totals == {COLES: D("20.60"), WOOL: D("21.00")}
+    assert verdict.totals == {COLES: D("26.10"), WOOL: D("29.50")}
     assert verdict.kind == "no_meaningful_difference"
+    assert (verdict.gap, verdict.threshold, verdict.split_savings) == (D("3.40"), D(8), D("2.60"))
+    flags = {
+        s.item_id: (s.tier_gap_flag, s.pack_gap_flag, s.special_flag) for s in verdict.item_savings
+    }
+    assert flags["i4"] == (False, True, False)  # yoghurt: pack gap
+    assert flags["i5"] == (True, False, True)  # bacon: tier gap, special ends in 6 days
+    assert flags["i7"] == (False, False, True)  # chicken: special ends in 3 days
+    assert flags["i3"] == (False, False, False)

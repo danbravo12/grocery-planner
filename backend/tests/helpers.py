@@ -28,7 +28,7 @@ def priced(
         product = product.model_copy(update={"price": Decimal(price)})
     if factor is not None:
         product = product.model_copy(update={"price": product.price * Decimal(factor)})
-    packs, total, _ = packs_needed(product.pack_size, product.pack_unit, product)
+    packs, total, leftover = packs_needed(product.pack_size, product.pack_unit, product)
     return PricedItem(
         item_id=item_id,
         item_name=term,
@@ -45,6 +45,8 @@ def priced(
         on_special=product.on_special,
         special_end_date=product.special_end_date,
         packs_needed=packs,
+        purchased_qty=packs * product.pack_size,
+        leftover_qty=leftover,
         total_cost=total,
         match_tier=tier,
         match_confidence="high",
@@ -79,6 +81,8 @@ def synthetic(item_id: str, store: Store, total: str, tier: MatchTier = "equival
         price=cost,
         unit_price=cost,
         packs_needed=1,
+        purchased_qty=Decimal(1),
+        leftover_qty=Decimal(0),
         total_cost=cost,
         match_tier=tier,
         match_confidence="high",

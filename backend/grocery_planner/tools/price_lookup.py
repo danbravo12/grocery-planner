@@ -1,5 +1,6 @@
 import json
 import re
+from collections.abc import Sequence
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from math import floor
@@ -137,19 +138,13 @@ def pack_size_within_tolerance(
     return abs(Decimal(pack_size) - needed) <= tolerance * needed
 
 
-def pack_comparable(
-    needed_qty: Decimal | int, product: CatalogueProduct, tolerance: Decimal = DEFAULT_TOLERANCE
-) -> bool:
-    """Is this product's pack size close enough to the need to compare on unit price?
-    True when one pack is within `tolerance` of the needed size, or, when the need spans several
-    packs, when the whole packs bought overshoot the need by no more than `tolerance`."""
-    needed = Decimal(needed_qty)
-    if pack_size_within_tolerance(needed, product.pack_size, tolerance):
-        return True
-    if needed > product.pack_size:
-        _, _, leftover = packs_needed(needed, product.pack_unit, product)
-        return leftover <= tolerance * needed
-    return False
+def pack_gap_exceeds(quantities: Sequence[Decimal], tolerance: Decimal = DEFAULT_TOLERANCE) -> bool:
+    """True when the purchased quantities differ by more than `tolerance`, relative to the
+    smallest. Exactly at the tolerance is not a gap."""
+    if len(quantities) < 2:
+        return False
+    low, high = min(quantities), max(quantities)
+    return high - low > tolerance * low
 
 
 class HasSpecial(Protocol):
