@@ -7,8 +7,12 @@ from typing import Any
 from pydantic import BaseModel
 
 from grocery_planner.llm.types import (
+    GenerationHandle,
+    GenerationStart,
     LLMResult,
+    NoopGenerationHandle,
     OnRequest,
+    ToolCallRecord,
     ToolLoopExceeded,
     ToolSpec,
     Usage,
@@ -36,6 +40,8 @@ class FakeLLMClient:
     script: list[Any]
     on_request: OnRequest | None = None
     before_request: Callable[[str], None] | None = None  # may raise, like the budget check
+    start_generation: Callable[[GenerationStart], GenerationHandle] | None = None  # tracing
+    on_tool_call: Callable[[ToolCallRecord], None] | None = None  # tracing
     model: str = "fake-model"
     calls: list[dict[str, Any]] = field(default_factory=list)  # what the agent sent
 
@@ -43,16 +49,24 @@ class FakeLLMClient:
         self.calls.append(
             {"system": system, "user": user, "output_type": output_type, "tools": tools}
         )
+        self._last = (system, user)
         if not self.script:
             raise AssertionError("FakeLLMClient script exhausted")
         return self.script.pop(0)
 
-    def _request(self) -> Usage:
+    def _request(self, kind: str = "request") -> Usage:
         if self.before_request:
             self.before_request(self.model)
+        handle: GenerationHandle = NoopGenerationHandle()
+        if self.start_generation:
+            system, user = self._last
+            handle = self.start_generation(
+                GenerationStart(self.model, 1, kind, False, system, user, None, 1, 0.1)
+            )
         delta = Usage(requests=1, model=self.model)
         if self.on_request:
             self.on_request(delta)
+        handle.end(output={"text": "(scripted)"}, usage=delta)
         return delta
 
     def generate[T: BaseModel](
@@ -83,7 +97,8 @@ class FakeLLMClient:
         by_name = {t.name: t for t in tools}
         usage, records = Usage(), []
         for n, round_calls in enumerate(step.rounds, start=1):
-            usage += self._request()  # the request in which the model asked for these tools
+            # the request in which the model asked for these tools
+            usage += self._request("request" if n == 1 else "tool_round")
             if n > max_tool_rounds:
                 raise ToolLoopExceeded(
                     f"model still asking for tools after {max_tool_rounds} rounds"
@@ -91,7 +106,9 @@ class FakeLLMClient:
             for name, args in round_calls:
                 _, record = execute_tool(by_name, name, args, lambda: 0.0)
                 records.append(record)
-        usage += self._request()  # the final answer
+                if self.on_tool_call:
+                    self.on_tool_call(record)
+        usage += self._request("tool_round")  # the final answer
         return LLMResult(
             parsed=step.result,
             model=self.model,

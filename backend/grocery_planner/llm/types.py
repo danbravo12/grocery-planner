@@ -79,14 +79,42 @@ class Usage:
 OnRequest = Callable[[Usage], None]  # called once per request actually sent, with its delta
 
 
+@dataclass(frozen=True)
+class GenerationStart:
+    """What a tracer is told when a request is about to be sent."""
+
+    model: str
+    attempt: int  # 1 for the first send of this request, 2+ for retries
+    kind: str  # request | repair | tool_round
+    fell_back: bool
+    system: str
+    user: str  # the user payload of the call
+    last_turn: str | None  # the newest turn when it is not the user payload (repair, tool result)
+    turns: int
+    temperature: float | None = None
+
+
+class GenerationHandle(Protocol):
+    def end(
+        self, *, output: Any = None, usage: "Usage | None" = None, error: str | None = None
+    ) -> None: ...
+
+
+class NoopGenerationHandle:
+    def end(self, *, output: Any = None, usage: "Usage | None" = None, error: str | None = None):
+        pass
+
+
 @dataclass
 class ModelHooks:
-    """What the budget layer plugs into a model client."""
+    """What the budget and tracing layers plug into a model client."""
 
     on_request: OnRequest | None = None  # after every request actually sent
     before_request: Callable[[str], None] | None = None  # (model) before a send; may raise
     fallback_allowed: Callable[[], bool] | None = None  # False: act as if no fallback is set
     on_quota_exhausted: Callable[[str, str], None] | None = None  # (model, kind) from Google
+    start_generation: Callable[[GenerationStart], GenerationHandle] | None = None  # tracing
+    on_tool_call: Callable[["ToolCallRecord"], None] | None = None  # tracing
 
 
 @dataclass(frozen=True)

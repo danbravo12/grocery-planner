@@ -45,9 +45,14 @@ def build_runner(args: argparse.Namespace, as_of: date) -> Runner:
             before_request=hooks.before_request,
             fallback_allowed=hooks.fallback_allowed,
             on_quota_exhausted=hooks.on_quota_exhausted,
+            start_generation=hooks.start_generation,
+            on_tool_call=hooks.on_tool_call,
         )
 
+    from grocery_planner.tracing import tracer_from_env
+
     primary, fallback = resolve_models()
+    tracer = tracer_from_env()
     if args.memory:
         return Runner(
             InMemoryRunStore(),
@@ -55,6 +60,8 @@ def build_runner(args: argparse.Namespace, as_of: date) -> Runner:
             InMemoryDishCache(),
             SeededFilePriceSource(anchor=as_of),
             budget=InMemoryDayBudget(primary, fallback),
+            tracer=tracer,
+            primary_model=primary,
         )
     from grocery_planner.db import db_url
     from grocery_planner.db.dish_cache import PostgresDishCache
@@ -73,6 +80,8 @@ def build_runner(args: argparse.Namespace, as_of: date) -> Runner:
         PostgresDishCache(url),
         PostgresPriceSource(url),
         budget=PostgresDayBudget(url, primary, fallback),
+        tracer=tracer,
+        primary_model=primary,
     )
 
 
@@ -117,6 +126,10 @@ def render(run: RunRecord, steps: list[StepRecord]) -> str:
         f"requests: {run.requests} of {run.estimated_requests} reserved   tokens: "
         f"{run.tokens_in} in / {run.tokens_out} out / {run.thinking_tokens} thinking   "
         f"time: {(run.latency_ms or 0) / 1000:.1f}s   loop-back used: {run.loopback_used}"
+    )
+    w(
+        f"cost: ${run.cost_usd:.2f} charged (free tier)   would cost on the paid tier: "
+        f"${run.would_cost_usd:.6f}"
     )
 
     ing = run.ingredient_output
@@ -223,6 +236,11 @@ def main(argv: list[str] | None = None, runner_factory: RunnerFactory = build_ru
     print(f"run {run_id} created; running...", flush=True)
     record = runner.run_plan(run_id)
     print(render(record, runner.store.get_steps(run_id)))
+    if record.langfuse_trace_id:
+        url = runner.tracer.trace_url(record.langfuse_trace_id)
+        print(f"\nTRACE {record.langfuse_trace_id}" + (f"\n  {url}" if url else ""))
+    else:
+        print("\n(tracing is off: no LANGFUSE keys)")
     if hasattr(runner.budget, "snapshot"):
         print("\n" + render_budget(runner.budget))
     return {"completed": 0, "stopped": 1}.get(record.status, 2)

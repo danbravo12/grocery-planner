@@ -214,3 +214,36 @@ def test_the_runner_reserves_and_settles_the_budget_in_postgres():
             conn.execute("DELETE FROM runs WHERE id = ANY(%s::uuid[])", (run_ids,))
         budget.close()
         store.close()
+
+
+def test_the_trace_id_and_would_be_cost_are_stored_on_the_run():
+    from grocery_planner.db.dish_cache import InMemoryDishCache
+    from grocery_planner.domain import PlannerConfig
+    from grocery_planner.llm import FakeLLMClient
+    from grocery_planner.orchestrator import PostgresRunStore, Runner
+    from grocery_planner.tracing import RecordingTracer
+    from tests.test_orchestrator import AS_OF, REQUEST, SOURCE, happy_script
+
+    migrate(db_url())
+    store = PostgresRunStore(db_url())
+    run_ids = []
+    try:
+        runner = Runner(
+            store, lambda hooks: FakeLLMClient(happy_script(), on_request=hooks.on_request),
+            InMemoryDishCache(), SOURCE, tracer=RecordingTracer(),
+        )  # fmt: skip
+        run_id = runner.create_run(REQUEST, PlannerConfig(), AS_OF)
+        run_ids.append(run_id)
+        row = runner.run_plan(run_id)
+        assert row.status == "completed" and row.langfuse_trace_id == f"recorded-{run_id}"
+        with psycopg.connect(db_url(), **CONNECT_KWARGS) as conn:
+            r = conn.execute(
+                "SELECT langfuse_trace_id, would_cost_usd, cost_usd FROM runs WHERE id = %s",
+                (run_id,),
+            ).fetchone()
+        assert r["langfuse_trace_id"] == f"recorded-{run_id}"
+        assert r["would_cost_usd"] == 0 and r["cost_usd"] == 0  # fake-model has no price
+    finally:
+        with psycopg.connect(db_url(), **CONNECT_KWARGS) as conn:
+            conn.execute("DELETE FROM runs WHERE id = ANY(%s::uuid[])", (run_ids,))
+        store.close()

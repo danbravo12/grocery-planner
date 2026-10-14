@@ -217,8 +217,12 @@ Tracing shows what each run did, and evals show whether a prompt or model change
 
 **Tracing**
 
-- Langfuse records each agent step: inputs, outputs, tool calls, tokens, latency and cost. It is the developer's debugging view.
-- Run summaries and parameters live in the `runs` table, with the Langfuse trace ID stored on each run so the two link up.
+- Langfuse (SDK v4) records one trace per run, named `plan_run`, with the run id as its seed so a run and its trace always match. Tags are the environment (dev, eval or prod, from `APP_ENV`), the prompt versions and the primary model; metadata holds the date used, the number of meals and dishes, and the settings used. No visitor id or IP ever goes in. It is the developer's debugging view.
+- Lean by design, about 10 billable units per run (the free plan includes 50,000 a month, with 30 days of history): one span per orchestrator step, one generation per model request (retries, repairs, the fallback model and tool rounds each get their own, with model, tokens, latency, attempt and the error class), and the planner's what-if calls as child spans of the planner span. A normal run is 7 observations, a run with the loop-back 11. Catalogue searches, packing and the planner's arithmetic get no spans; the step span carries one summary (searches, candidates, cache hits).
+- Generations store the user payload and the model output in full, and the system prompt as its versioned name (for example `planner@3`) rather than its text.
+- Cost shown in Langfuse is what the request would cost on Google's paid tier, using the paid price of the model that answered (prices and the date they were checked live in code); the free tier actually charges nothing. The run's total is stored on the run as `would_cost_usd`.
+- Tracing never breaks or slows a run: every tracer error is caught and logged, export is batched in the background, and the run waits at most a few seconds to flush at its end. With no Langfuse keys, tracing is off.
+- Run summaries and parameters live in the `runs` table, with the Langfuse trace ID stored on each run so the two link up. Langfuse keeps 30 days; the `run_steps` records are the permanent record.
 - The public "how it worked" panel reads from the app's own `run_steps` records, not from Langfuse, so it works on shared links without exposing the tracing account.
 
 **Evals:** about 30 to 40 cases, split by agent.

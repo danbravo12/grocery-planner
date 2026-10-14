@@ -49,7 +49,8 @@ class RunRecord(BaseModel):
     tokens_in: int = 0
     tokens_out: int = 0
     thinking_tokens: int = 0
-    cost_usd: Decimal = Decimal(0)
+    cost_usd: Decimal = Decimal(0)  # what was actually charged (the free tier charges nothing)
+    would_cost_usd: Decimal = Decimal(0)  # what the run WOULD cost on Google's paid tier
     latency_ms: int | None = None
     loopback_used: bool = False
     langfuse_trace_id: str | None = None

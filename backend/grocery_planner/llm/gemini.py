@@ -23,9 +23,12 @@ from grocery_planner.env import getenv
 from grocery_planner.llm.ratelimit import DEFAULT_RATE_LIMITER, RateLimiter
 from grocery_planner.llm.types import (
     BudgetExhausted,
+    GenerationHandle,
+    GenerationStart,
     LLMError,
     LLMResult,
     LLMUnavailable,
+    NoopGenerationHandle,
     OnRequest,
     QuotaExhausted,
     SchemaValidationFailed,
@@ -36,6 +39,7 @@ from grocery_planner.llm.types import (
     execute_tool,
 )
 
+log = logging.getLogger(__name__)
 # The SDK warns whenever a reply holds a function call; we read the parts ourselves.
 logging.getLogger("google_genai.types").setLevel(logging.ERROR)
 
@@ -115,6 +119,8 @@ class GeminiClient:
         fallback_allowed: Callable[[], bool] | None = None,
         on_quota_exhausted: Callable[[str, str], None] | None = None,
         rate_limiter: RateLimiter | None = _DEFAULT_LIMITER,
+        start_generation: Callable[[GenerationStart], GenerationHandle] | None = None,
+        on_tool_call: Callable[[ToolCallRecord], None] | None = None,
     ) -> None:
         self.model, fallback = resolve_models(model, fallback_model)
         # None means no fallback. Never used by the single-shot probe.
@@ -122,6 +128,8 @@ class GeminiClient:
         self._before_request = before_request
         self._fallback_allowed = fallback_allowed
         self._on_quota_exhausted = on_quota_exhausted
+        self._start_generation = start_generation
+        self._on_tool_call = on_tool_call
         if rate_limiter is _DEFAULT_LIMITER:  # only real clients share the process-wide limiter
             rate_limiter = DEFAULT_RATE_LIMITER if genai_client is None else None
         self._limiter = rate_limiter
@@ -179,7 +187,10 @@ class GeminiClient:
             rounds = 0
             while True:
                 response = self._request(
-                    call, contents, answer_now if rounds >= max_tool_rounds else config
+                    call,
+                    contents,
+                    answer_now if rounds >= max_tool_rounds else config,
+                    kind="request" if rounds == 0 else "tool_round",
                 )
                 function_calls = response.function_calls or []
                 if not function_calls:
@@ -197,6 +208,7 @@ class GeminiClient:
                         by_name, fc.name, dict(fc.args or {}), self._clock
                     )
                     call.tool_calls.append(record)
+                    self._report_tool_call(record)
                     parts.append(types.Part.from_function_response(name=fc.name, response=result))
                 contents.append(types.Content(role="user", parts=parts))
 
@@ -228,6 +240,13 @@ class GeminiClient:
             except QuotaExhausted as e2:
                 self._report_quota(call.model, e2)
                 raise
+
+    def _report_tool_call(self, record: ToolCallRecord) -> None:
+        if self._on_tool_call is not None:
+            try:
+                self._on_tool_call(record)
+            except Exception:
+                log.warning("tracing failed to record a tool call", exc_info=True)
 
     def _report_quota(self, model: str, exc: Exception) -> None:
         """Tell the budget layer when Google (not our counter) says a model is out for the day."""
@@ -284,7 +303,13 @@ class GeminiClient:
         if self._on_request:
             self._on_request(delta)
 
-    def _request(self, call: _Call, contents: list, config: types.GenerateContentConfig):
+    def _request(
+        self,
+        call: _Call,
+        contents: list,
+        config: types.GenerateContentConfig,
+        kind: str = "request",
+    ):
         """One logical request, retried per the failure type. Every send is counted."""
         attempt = 0
         while True:
@@ -293,12 +318,14 @@ class GeminiClient:
                 self._before_request(call.model)
             if self._limiter:  # per-minute: waits for a slot, or raises LLMUnavailable
                 self._limiter.acquire(call.model)
+            handle = self._begin_generation(call, contents, config, kind, attempt)
             try:
                 response = self._genai.models.generate_content(
                     model=call.model, contents=contents, config=config
                 )
             except errors.ClientError as e:
                 self._emit(call, Usage(requests=1))
+                _end_generation(handle, error=_error_label(e))
                 if e.code != 429:
                     raise LLMError(f"{e.code} {e.status}: {e.message}") from e
                 kind = classify_429(e)
@@ -314,6 +341,7 @@ class GeminiClient:
                     raise QuotaExhausted(kind, str(e.message)) from e
             except (errors.ServerError, httpx.TransportError, TimeoutError) as e:
                 self._emit(call, Usage(requests=1))
+                _end_generation(handle, error=_error_label(e))
                 is_timeout = not isinstance(e, errors.ServerError) or e.code == 504
                 limit = self._limit(TIMEOUT_ATTEMPTS if is_timeout else MAX_ATTEMPTS)
                 if attempt >= limit:
@@ -321,17 +349,40 @@ class GeminiClient:
                 delay = self._backoff(attempt)
             else:
                 um = response.usage_metadata
-                self._emit(
-                    call,
-                    Usage(
-                        requests=1,
-                        input_tokens=(um.prompt_token_count or 0) if um else 0,
-                        output_tokens=(um.candidates_token_count or 0) if um else 0,
-                        thinking_tokens=(um.thoughts_token_count or 0) if um else 0,
-                    ),
+                usage = Usage(
+                    requests=1,
+                    input_tokens=(um.prompt_token_count or 0) if um else 0,
+                    output_tokens=(um.candidates_token_count or 0) if um else 0,
+                    thinking_tokens=(um.thoughts_token_count or 0) if um else 0,
+                    model=call.model,
                 )
+                self._emit(call, usage)
+                _end_generation(handle, output=_describe_output(response), usage=usage)
                 return response
             self._sleep(delay)
+
+    def _begin_generation(self, call, contents, config, kind, attempt) -> GenerationHandle:
+        """Tell the tracer a send is about to happen. Never raises: tracing must not break a run."""
+        if self._start_generation is None:
+            return NoopGenerationHandle()
+        try:
+            user, last_turn = _describe_contents(contents)
+            return self._start_generation(
+                GenerationStart(
+                    model=call.model,
+                    attempt=attempt,
+                    kind=kind,
+                    fell_back=call.fell_back,
+                    system=str(config.system_instruction or ""),
+                    user=user,
+                    last_turn=last_turn,
+                    turns=len(contents),
+                    temperature=config.temperature,
+                )
+            )
+        except Exception:
+            log.warning("tracing failed to start a generation", exc_info=True)
+            return NoopGenerationHandle()
 
     def _backoff(self, attempt: int) -> float:
         base = BACKOFF_SECONDS[min(attempt, len(BACKOFF_SECONDS)) - 1]
@@ -365,7 +416,7 @@ class GeminiClient:
                     + "\nReply again with corrected JSON only."
                 ),
             ]
-            second = _text(self._request(call, repair, config))
+            second = _text(self._request(call, repair, config, kind="repair"))
             parsed, problems2 = _parse(output_type, second)
             if parsed is None:
                 raise SchemaValidationFailed([text, second], problems + problems2)
@@ -397,3 +448,38 @@ def _parse[T: BaseModel](output_type: type[T], text: str) -> tuple[T | None, lis
         return output_type.model_validate_json(text), []
     except ValidationError as e:
         return None, [f"{'.'.join(map(str, x['loc'])) or '(root)'}: {x['msg']}" for x in e.errors()]
+
+
+def _part_text(part: Any) -> str:
+    if getattr(part, "function_call", None):
+        fc = part.function_call
+        return f"[function_call {fc.name} {json.dumps(dict(fc.args or {}), default=str)}]"
+    if getattr(part, "function_response", None):
+        fr = part.function_response
+        return f"[function_response {fr.name} {json.dumps(fr.response, default=str)}]"
+    return part.text or ""
+
+
+def _describe_contents(contents: list) -> tuple[str, str | None]:
+    """(the first user payload, the newest turn if it is a different one) for tracing."""
+    texts = ["".join(_part_text(p) for p in (c.parts or [])) for c in contents]
+    return texts[0], (texts[-1] if len(texts) > 1 else None)
+
+
+def _describe_output(response: Any) -> Any:
+    calls = response.function_calls or []
+    if calls:
+        return {"function_calls": [{"name": c.name, "args": dict(c.args or {})} for c in calls]}
+    return {"text": _text(response)}
+
+
+def _error_label(exc: Exception) -> str:
+    code = getattr(exc, "code", None)
+    return f"{type(exc).__name__}({code})" if code else type(exc).__name__
+
+
+def _end_generation(handle: GenerationHandle, **kw: Any) -> None:
+    try:
+        handle.end(**kw)
+    except Exception:
+        log.warning("tracing failed to end a generation", exc_info=True)
