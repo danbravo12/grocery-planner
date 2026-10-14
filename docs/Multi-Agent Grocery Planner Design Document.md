@@ -59,21 +59,21 @@ This agent turns the meal form into one consolidated, quantity-scaled list of pu
 
 **Job**
 
-1. Expand each dish into ingredients
-2. Scale quantities by people × days
-3. Merge duplicates across meals into one list, normalising units first ("2 onions" and "200g onion" become one unit)
-4. Map each ingredient to a generic purchasable item, e.g. "beef eye fillet, 400g, about 2 steaks"
+1. Expand each dish into per-serving ingredients, in one batched model call per request for all dishes not already cached
+2. Scale quantities by people × days (code)
+3. Merge duplicates across meals into one list (code), by name and canonical unit, rounding countable items up to whole numbers
+4. Name each ingredient from a catalogue-derived vocabulary of generic items, each with a canonical unit (an out-of-vocabulary name is allowed and flagged)
 5. Respect each meal's avoid field by substituting, and say so in the assumptions
 
-**Output per item:** name, quantity, unit, purchasable form, category (meat, produce and so on), which meals use it, and a pantry-staple flag. The output also carries a top-level `assumptions[]`.
+**Output per item:** name, quantity, unit, category (meat, produce and so on), which meals use it, a pantry-staple flag, an in-vocabulary flag, and sanity flags for unusual amounts. The output also carries a top-level `assumptions[]`.
 
 **Rules**
 
 - It maps to generic items, not store products. Matching to real products is the price agent's job, which keeps the two agents separate.
 - Avoid is per meal, so the merged list reflects each meal's own constraints.
 - It does not ask clarifying questions. A contradiction (for example avoid: dairy with a creamy potato salad) is resolved by substitution and noted.
-- Unit normalisation is done by the model and noted in the assumptions. There is no unit-conversion tool.
-- Dish expansion is cached per dish and normalised avoid text, written only after the output passes schema validation (see Data layer), and scaling by people and days stays deterministic.
+- Names and units come from the vocabulary: the model must use a vocabulary name with its canonical unit when one fits, and code validates this (a mismatch triggers one schema repair). There is no unit-conversion tool.
+- Dish expansion is cached per dish and normalised avoid text, written only after the output passes schema validation (see Data layer), and scaling, merging and rounding are code, not the model.
 
 ## Price agent
 
@@ -279,7 +279,7 @@ Every parameter has a default and a clamped range, and the values used are store
 | --- | --- | --- |
 | Prices are seeded, not live | Scraping is brittle and may breach store terms | A live source behind the same lookup interface, with freshness checks |
 | Per-visitor limits use a cookie and IP | No accounts, to keep friction low | Authenticated users and per-account quotas |
-| Default model is 3.1 Flash-Lite, not 3.5 | 3.5 Flash-Lite timed out for this project at build time | 3.1 is the default and the probe command (`python -m grocery_planner.llm.probe --model gemini-3.5-flash-lite`) re-checks 3.5 with one request |
+| Default model is 3.1 Flash-Lite, not 3.5 | 3.5 Flash-Lite had a transient outage at build time | the default model is chosen by eval score (step 11); the probe command (`python -m grocery_planner.llm.probe --model gemini-3.5-flash-lite`) re-checks a model with one request |
 | One free-tier model provider | Cost | A swappable model layer already exists; add fallback providers and paid quota |
 | Free-tier quota can run out for the day | Cost | Paid tier, request queue and priority for in-flight runs |
 | Fixed agent sequence with one loop-back | Predictable and cheap | A supervisor that chooses steps, if evals show it helps |

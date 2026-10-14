@@ -1,5 +1,16 @@
 {
  "note": "Fictional seeded prices (AUD). Not real store data. Dates are relative to an anchor date resolved at load time: price_age_days = days before the anchor; special_ends_in_days = days after it.",
+ "pantry_staples": [
+  "salt",
+  "pepper",
+  "olive oil",
+  "vegetable oil",
+  "sugar",
+  "flour",
+  "cumin",
+  "paprika",
+  "curry powder"
+ ],
  "products": [
   {
    "store": "coles",

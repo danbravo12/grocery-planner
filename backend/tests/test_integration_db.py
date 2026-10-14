@@ -75,3 +75,32 @@ def test_rls_enabled_on_every_table_with_no_policies():
     assert {"runs", "run_steps", "price_catalogue", "dish_cache", "usage_counters"} <= names
     assert [t["tablename"] for t in tables if not t["rowsecurity"]] == []
     assert policies == []
+
+
+def test_dish_cache_round_trip():
+    from decimal import Decimal
+
+    from grocery_planner.db.dish_cache import PostgresDishCache
+    from grocery_planner.domain.ingredients import DishIngredient, DishResult
+
+    key = ("integration test dish", "dairy,nuts")
+    result = DishResult(
+        ingredients=[
+            DishIngredient(
+                name="butter", quantity_per_serving=Decimal("12.5"), unit="g", in_vocabulary=True
+            )
+        ],
+        assumptions=["Swapped for oil."],
+    )
+    cache = PostgresDishCache(db_url())
+    try:
+        assert cache.get(*key) is None
+        cache.put(*key, "Integration Test Dish", result, "model-a")
+        assert cache.get(*key) == result
+        assert cache.get(key[0], "") is None  # a different avoid is a different row
+        cache.put(*key, "Integration Test Dish", result.model_copy(update={"assumptions": []}), "b")
+        assert cache.get(*key).assumptions == []  # upsert overwrites
+    finally:
+        with psycopg.connect(db_url(), **CONNECT_KWARGS) as conn:
+            conn.execute("DELETE FROM dish_cache WHERE dish_key = %s", (key[0],))
+        cache.close()
