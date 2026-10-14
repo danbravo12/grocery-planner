@@ -1,0 +1,44 @@
+# DRAFT expected values. Full orchestrator runs (ingredient -> price -> stop check -> planner)
+# with the in-memory store, the seeded catalogue, bypass_cache=true and the fallback model off.
+# The recommendation is what the seed's near-identical prices should give; the pipeline also
+# must complete within the 9-request budget the orchestrator reserves.
+
+- id: e2e-friday-dinner
+  agent: e2e
+  notes: The spec's example request end to end; matches fixture a, which is a near-tie.
+  input:
+    meals:
+      - {meal_name: Friday dinner, mains: [fillet mignon], sides: [potato salad, fries], people: 2, days: 1}
+  checks:
+    max_requests: 9
+    min_items: 3
+    recommendation: [no_meaningful_difference]
+
+- id: e2e-two-meals-shared-ingredients
+  agent: e2e
+  notes: Two meals sharing onion, garlic and mince; matches fixture b.
+  input:
+    meals:
+      - {meal_name: Monday bolognese, mains: [spaghetti bolognese], people: 4, days: 3}
+      - {meal_name: Tuesday chilli, mains: [chilli con carne], people: 4, days: 3}
+  checks:
+    max_requests: 9
+    min_items: 6
+    recommendation: [no_meaningful_difference]
+
+- id: e2e-three-meals-avoid-and-parameters
+  agent: e2e
+  notes: >
+    The CLI's second example: three meals, a dairy avoid, pantry staples on and a $10 savings
+    threshold passed as a parameter. Exercises the biggest request the demo expects.
+  input:
+    meals:
+      - {meal_name: Monday bolognese, mains: [spaghetti bolognese], people: 4, days: 3}
+      - {meal_name: Tuesday chilli, mains: [chilli con carne], sides: [steamed rice], people: 4, days: 3}
+      - {meal_name: Weekend BBQ, mains: [creamy potato salad], people: 3, days: 2, avoid: dairy}
+    include_pantry_staples: true
+    parameters: {savings_threshold_dollars: "10"}
+  checks:
+    max_requests: 9
+    min_items: 8
+    recommendation: [no_meaningful_difference]

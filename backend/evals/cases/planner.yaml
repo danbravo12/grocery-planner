@@ -1,0 +1,165 @@
+# DRAFT expected values. The inputs are saved price-agent outputs (backend/tests/fixtures) or a
+# constructed basket, so the code's own numbers (rule verdict, confidence, flags) are fixed and
+# are asserted offline too (tests/test_evals.py). What the evals measure is the agent's
+# judgement: following the verdict, overriding it with the right reason, and not inventing
+# amounts. Every case also gets: schema_valid, no_fallback, no_invented_amounts, tip_rules,
+# tool_only_when_split_can_win.
+
+- id: pl-friday-dinner
+  agent: planner
+  notes: >
+    Fixture a (the Friday dinner): Coles $37.00 vs Woolworths $36.00 against a $8.00
+    threshold. A near-tie must come back as no meaningful difference, not a store.
+  input:
+    build: {kind: fixture, name: a}
+  checks:
+    max_requests: 2
+    rule_verdict: no_meaningful_difference
+    recommendation: no_meaningful_difference
+    overridden: false
+    confidence: high
+    flags_exclude: [special_dependency, missing]
+
+- id: pl-edge-cases-with-gaps
+  agent: planner
+  notes: >
+    Fixture c (seeded edge cases): a $3.30 gap, one-sided items, a special ending in 3 days
+    and a yoghurt pack gap. Still no meaningful difference; confidence drops to medium because
+    of the gaps, and the flags are carried through from code.
+  input:
+    build: {kind: fixture, name: c}
+  checks:
+    max_requests: 2
+    rule_verdict: no_meaningful_difference
+    recommendation: no_meaningful_difference
+    overridden: false
+    confidence: medium
+    flags_include: [missing, pack_gap, special_ending]
+
+- id: pl-large-gap-one-store
+  agent: planner
+  notes: >
+    Coles 20% dearer on everything ($18.42 gap over an $8.00 threshold). The right answer is
+    Woolworths, with no override. No split can beat shopping at one store here, so the
+    what-if tool must not be offered.
+  input:
+    build: {kind: scenario, name: large_gap}
+  checks:
+    max_requests: 2
+    rule_verdict: one_store
+    recommendation: one_store
+    store: woolworths
+    overridden: false
+    confidence: high
+    tool_called: false
+
+- id: pl-split-wins
+  agent: planner
+  notes: >
+    Coles is cheapest overall by only $3.02, but beef mince is $10 cheaper at Woolworths, so
+    a split saves $10.00 against an $8.00 threshold. This is the one case where the what-if
+    tool is offered.
+  input:
+    build: {kind: scenario, name: split}
+  checks:
+    max_requests: 4
+    rule_verdict: split
+    recommendation: split
+    overridden: false
+    split_assignment: {beef mince: woolworths}
+    confidence: high
+
+- id: pl-saving-depends-on-special
+  agent: planner
+  notes: >
+    Woolworths looks $11.40 cheaper only because beef mince is on special until tomorrow
+    (without it the gap is $1.00). The code verdict is one_store; the agent must override to no
+    meaningful difference and say why (special_dependency).
+  input:
+    build: {kind: scenario, name: special_tomorrow}
+  checks:
+    max_requests: 2
+    rule_verdict: one_store
+    recommendation: no_meaningful_difference
+    overridden: true
+    override_reason: special_dependency
+    flags_include: [special_dependency, special_ending]
+
+- id: pl-saving-depends-on-doubtful-match
+  agent: planner
+  notes: >
+    The whole $11.40 saving rests on one low-confidence branded pick against a house brand.
+    Code says one_store with low confidence; the agent must override (match_quality) and ask
+    for that item to be re-checked.
+  input:
+    build: {kind: scenario, name: doubtful_match}
+  checks:
+    max_requests: 2
+    rule_verdict: one_store
+    recommendation: no_meaningful_difference
+    overridden: true
+    override_reason: match_quality
+    confidence: low
+    recheck: any
+
+- id: pl-near-identical-basket
+  agent: planner
+  notes: >
+    Edge case d: eight items, Coles $34.80 vs Woolworths $34.50. The cleanest no meaningful
+    difference, with high confidence, no re-check, and no tips (no item differs by $2).
+  input:
+    build: {kind: basket_d}
+  checks:
+    max_requests: 2
+    rule_verdict: no_meaningful_difference
+    recommendation: no_meaningful_difference
+    overridden: false
+    confidence: high
+    recheck: none
+    tool_called: false
+    flags_exclude: [special_dependency, missing, tier_gap]
+
+- id: pl-coles-25-percent-dearer
+  agent: planner
+  notes: >
+    The same basket with Coles 25% dearer: $43.50 vs $34.50, a $9.00 gap over the $8.00
+    threshold. A clean one_store (Woolworths) result that sits just above the line.
+  input:
+    build: {kind: basket_d, coles_factor: "1.25"}
+  checks:
+    max_requests: 2
+    rule_verdict: one_store
+    recommendation: one_store
+    store: woolworths
+    overridden: false
+    confidence: high
+
+- id: pl-one-expensive-item-tip-only
+  agent: planner
+  notes: >
+    Beef mince is $2.70 dearer at Coles but the baskets differ by only $3.30. Below the
+    threshold this is a tip at most (an item must differ by 25% of the threshold, $2.00), never
+    a split, and any tip must follow the tip rules.
+  input:
+    build: {kind: basket_d, prices: {mince: {coles: "9.50"}}}
+  checks:
+    max_requests: 2
+    rule_verdict: no_meaningful_difference
+    recommendation: no_meaningful_difference
+    overridden: false
+    tool_called: false
+
+- id: pl-incomplete-basket
+  agent: planner
+  notes: >
+    Woolworths has no cheddar or carrots. The planner compares the six common items, flags the
+    missing ones, and confidence is medium (75% comparable), not high.
+  input:
+    build: {kind: basket_d, missing: {cheddar: [woolworths], carrot: [woolworths]}}
+  checks:
+    max_requests: 2
+    rule_verdict: no_meaningful_difference
+    recommendation: no_meaningful_difference
+    overridden: false
+    confidence: medium
+    flags_include: [missing]

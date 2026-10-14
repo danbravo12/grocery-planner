@@ -2,7 +2,7 @@
 
 A multi-agent grocery planner: meals in, shopping list, supermarket prices, and a where-to-shop recommendation out. Full design: [docs/Multi-Agent Grocery Planner Design Document.md](docs/Multi-Agent%20Grocery%20Planner%20Design%20Document.md). Choices the design doc left open are logged in [docs/DECISIONS.md](docs/DECISIONS.md).
 
-**Status: step 3 of the build plan.** Scaffold, database schema and migrations, seeded price catalogue, price lookup (file and Postgres), and the planner's deterministic maths. There are no agents, LLM calls, orchestrator, API endpoints (beyond `GET /health`) or frontend yet.
+**Status: step 11 of the build plan.** Backend complete up to evals and CI: ingredient, price and planner agents, orchestrator, guardrails, tracing, 37 eval cases and GitHub Actions. There are no API endpoints (beyond `GET /health`) or frontend yet.
 
 ## Layout
 
@@ -67,6 +67,34 @@ uv run pytest -m integration                         # price source equivalence,
 Seed dates are relative ("special ends in 3 days"), so re-run the seed daily to keep specials current; it resolves against today in Australia/Sydney unless you pass an anchor date. The integration tests also run the seed with today's anchor.
 
 To get plain SQL instead: `uv run python -m grocery_planner.tools.seed_sql [anchor] > ../db/seed/price_catalogue.sql`.
+
+## Evals
+
+`backend/evals/` holds 37 eval cases (12 ingredient, 12 price, 10 planner, 3 end to end) in `evals/cases/*.yaml`. Every check is deterministic (no LLM judge yet): required items, quantity ranges, avoid word lists, allowed product ids and tiers, pack gaps, specials, the planner's verdict, override reasons and "no invented dollar amounts". Runs use a separate key (`GEMINI_EVAL_API_KEY`, never the demo key), `APP_ENV=eval`, `bypass_cache=True`, the fallback model off, and a fixed `as_of` of 2026-10-12.
+
+```bash
+cd backend
+uv run python -m evals.run                       # everything, default model
+uv run python -m evals.run --agent planner       # one agent (repeatable)
+uv run python -m evals.run --model gemini-3.5-flash-lite --repeat 3
+uv run python -m evals.run --list
+```
+
+It writes `evals/results/<timestamp>-<model>.json` and a markdown summary, and exits 1 if an agent is more than 10 points below `evals/baseline.json`, below its floor (ingredient 85%, price 85%, planner 90%), or if any answer came from a fallback model. A full run takes about 5 minutes at the 12 requests a minute limit, so it is not part of the normal test run.
+
+**Scores (DRAFT: the expected values are awaiting review, so the baseline is not final).** Pass rate = cases passed over case runs.
+
+| Agent | Cases | `gemini-3.1-flash-lite` (default), 1 run | `gemini-3.5-flash-lite`, 3 runs (mean / min) |
+| --- | ---: | ---: | ---: |
+| Ingredient | 12 | 9/12 (75.0%) | 83.3% / 83.3% |
+| Price | 12 | 12/12 (100%) | 94.4% / 91.7% |
+| Planner | 10 | 10/10 (100%) | 100% / 100% |
+| End to end | 3 | 3/3 (100%) | 100% / 100% |
+
+The 3.1 column is one run made before Google's API degraded (a later 3 repeat run of 3.1 was swamped by 503 errors and then the eval key's daily quota, so it says nothing about the model). One of the three ingredient misses was a wrong expectation that has since been corrected. See [docs/DECISIONS.md](docs/DECISIONS.md) (step 11) for details.
+
+CI: `.github/workflows/ci.yml` runs ruff, the unit tests and the integration tests (against a Postgres service container) on every push and pull request. `.github/workflows/evals.yml` runs the evals when agents, prompts, the model layer, the evals, fixtures or the catalogue change, or on demand. It needs the repository secret `GEMINI_EVAL_API_KEY`.
+
 
 ## Known limitation: Supabase free tier pauses
 

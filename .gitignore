@@ -11,3 +11,7 @@ dist/
 .DS_Store
 .claude/
 db/seed/price_catalogue.sql
+
+# eval run output (CI uploads it as an artifact)
+backend/evals/results/*
+!backend/evals/results/.gitkeep

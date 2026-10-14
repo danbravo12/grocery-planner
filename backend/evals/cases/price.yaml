@@ -1,0 +1,290 @@
+# DRAFT expected values, written from the seed catalogue (db/seed/price_catalogue.json) at the
+# fixed anchor 2026-10-12. "products" is the set of acceptable product ids for that store;
+# "best_value" additionally requires the cheapest of those for the quantity needed.
+# Every case also gets: schema_valid, no_fallback, valid_product_ids, rows_complete.
+# Quantities are the total needed (grams, millilitres or count).
+
+- id: price-near-identical-basket
+  agent: price
+  notes: >
+    Edge case d: eight everyday items priced almost identically at both stores. The agent must
+    pick standard-band products of the right type (milk is not coconut milk, carrots are not
+    the premium line) and the cheapest acceptable one at each store.
+  input:
+    items:
+      - {name: milk, quantity: 2000, unit: ml}
+      - {name: bread, quantity: 700, unit: g}
+      - {name: eggs, quantity: 12, unit: each}
+      - {name: banana, quantity: 1000, unit: g}
+      - {name: brown onion, quantity: 1000, unit: g}
+      - {name: beef mince, quantity: 500, unit: g}
+      - {name: cheddar, quantity: 500, unit: g}
+      - {name: carrot, quantity: 1000, unit: g}
+  checks:
+    max_requests: 1
+    expect:
+      milk:
+        coles: {products: [col-milk-01, col-milk-02], tiers: [exact, equivalent], best_value: true}
+        woolworths: {products: [wol-milk-01, wol-milk-02], tiers: [exact, equivalent], best_value: true}
+      bread:
+        coles: {products: [col-white-bread-01, col-white-bread-02, col-wholemeal-bread-01, col-wholemeal-bread-02], tiers: [exact, equivalent]}
+        woolworths: {products: [wol-white-bread-01, wol-white-bread-02, wol-wholemeal-bread-01, wol-wholemeal-bread-02], tiers: [exact, equivalent]}
+      eggs:
+        coles: {products: [col-eggs-01, col-eggs-02], tiers: [exact, equivalent], best_value: true}
+        woolworths: {products: [wol-eggs-01, wol-eggs-02], tiers: [exact, equivalent], best_value: true}
+      banana:
+        coles: {products: [col-banana-01], tiers: [exact, equivalent]}
+        woolworths: {products: [wol-banana-01], tiers: [exact, equivalent]}
+      brown onion:
+        coles: {products: [col-brown-onion-01], tiers: [exact, equivalent]}
+        woolworths: {products: [wol-brown-onion-01], tiers: [exact, equivalent]}
+      beef mince:
+        coles: {products: [col-beef-mince-01, col-beef-mince-02], tiers: [exact, equivalent], best_value: true}
+        woolworths: {products: [wol-beef-mince-01, wol-beef-mince-02], tiers: [exact, equivalent], best_value: true}
+      cheddar:
+        coles: {products: [col-cheddar-01, col-cheddar-02], tiers: [exact, equivalent], best_value: true}
+        woolworths: {products: [wol-cheddar-01, wol-cheddar-02], tiers: [exact, equivalent], best_value: true}
+      carrot:
+        coles: {products: [col-carrot-01], tiers: [exact, equivalent]}
+        woolworths: {products: [wol-carrot-01], tiers: [exact, equivalent]}
+
+- id: price-exact-named-brands
+  agent: price
+  notes: >
+    Edge case e: the user named a brand, so the same brand must be matched at both stores and
+    the tier is exact. Diced tomatoes need two 400 g packs.
+  input:
+    items:
+      - {name: tomato sauce, quantity: 500, unit: ml, brand: Bellvue}
+      - {name: diced tomatoes, quantity: 800, unit: g, brand: Bellvue}
+      - {name: peas, quantity: 1000, unit: g, brand: Kingsway}
+  checks:
+    max_requests: 1
+    expect:
+      tomato sauce:
+        coles: {products: [col-tomato-sauce-02], tiers: [exact]}
+        woolworths: {products: [wol-tomato-sauce-02], tiers: [exact]}
+      diced tomatoes:
+        coles: {products: [col-diced-tomatoes-02], tiers: [exact], packs: 2}
+        woolworths: {products: [wol-diced-tomatoes-02], tiers: [exact], packs: 2}
+      peas:
+        coles: {products: [col-peas-02], tiers: [exact]}
+        woolworths: {products: [wol-peas-02], tiers: [exact]}
+
+- id: price-one-sided-items
+  agent: price
+  notes: >
+    Edge cases a1 and a2: sourdough is sold only at Woolworths and potato gems only at Coles.
+    Where the seed lacks a product the agent may mark it not found or offer a substitute, but
+    never a usable match, and exact can never survive a one-sided item. The retry round is
+    allowed (2 requests).
+  input:
+    items:
+      - {name: sourdough, quantity: 600, unit: g}
+      - {name: potato gems, quantity: 1000, unit: g}
+      - {name: milk, quantity: 2000, unit: ml}
+  checks:
+    max_requests: 2
+    expect:
+      sourdough:
+        coles: {tiers: [not_found, substitute]}
+        woolworths: {products: [wol-sourdough-01], tiers: [equivalent]}
+      potato gems:
+        coles: {products: [col-potato-gems-01], tiers: [equivalent]}
+        woolworths: {tiers: [not_found, substitute]}
+      milk:
+        coles: {products: [col-milk-01, col-milk-02], tiers: [exact, equivalent]}
+        woolworths: {products: [wol-milk-01, wol-milk-02], tiers: [exact, equivalent]}
+
+- id: price-special-beats-house-brand
+  agent: price
+  notes: >
+    Edge case f and the weekend fries special: a branded product on special is cheaper than the
+    house brand at Coles, so it is the best value and is picked, with the on-special label. At
+    Woolworths the house brand wins. The brand/house mix is a tier gap and must be flagged.
+  input:
+    items:
+      - {name: bacon, quantity: 250, unit: g}
+      - {name: fries, quantity: 1000, unit: g}
+  checks:
+    max_requests: 1
+    expect:
+      bacon:
+        coles: {products: [col-bacon-01, col-bacon-02], tiers: [equivalent], best_value: true, on_special: true}
+        woolworths: {products: [wol-bacon-01, wol-bacon-02], tiers: [equivalent], best_value: true}
+        flags: [tier_gap]
+      fries:
+        coles: {products: [col-fries-01, col-fries-02], tiers: [equivalent], best_value: true, on_special: true}
+        woolworths: {products: [wol-fries-01, wol-fries-02], tiers: [equivalent], best_value: true}
+        flags: [tier_gap]
+
+- id: price-special-ending-soon
+  agent: price
+  notes: >
+    Edge case c: Woolworths chicken breast is on special until 2026-10-15 and is the best
+    value, so it is picked and carries its end date. Chicken thigh is a control with no special.
+  input:
+    items:
+      - {name: chicken breast, quantity: 1000, unit: g}
+      - {name: chicken thigh, quantity: 1000, unit: g}
+  checks:
+    max_requests: 1
+    expect:
+      chicken breast:
+        coles: {products: [col-chicken-breast-01, col-chicken-breast-02], tiers: [equivalent], best_value: true, on_special: false}
+        woolworths: {products: [wol-chicken-breast-01], tiers: [equivalent], on_special: true, special_end: "2026-10-15"}
+      chicken thigh:
+        coles: {products: [col-chicken-thigh-01], tiers: [equivalent], on_special: false}
+        woolworths: {products: [wol-chicken-thigh-01], tiers: [equivalent], on_special: false}
+
+- id: price-pack-gap-flagged
+  agent: price
+  notes: >
+    Edge case b2: needing 1 kg of yoghurt, Coles sells one 1000 g tub and Woolworths needs two
+    700 g tubs (1400 g). Pack size never changes the tier, so both stay usable, but the 40% gap
+    in what you must buy is flagged as pack_gap.
+  input:
+    items:
+      - {name: yoghurt, quantity: 1000, unit: g}
+  checks:
+    max_requests: 1
+    expect:
+      yoghurt:
+        coles: {products: [col-yoghurt-01, col-yoghurt-02], tiers: [exact, equivalent], best_value: true, packs: 1}
+        woolworths: {products: [wol-yoghurt-01, wol-yoghurt-02], tiers: [exact, equivalent], best_value: true, packs: 2}
+        pack_gap: true
+
+- id: price-pack-within-tolerance
+  agent: price
+  notes: >
+    Edge case b1: needing 400 g of spaghetti, Coles buys 500 g and Woolworths 450 g, 11% apart,
+    inside the 15% tolerance, so there is no pack_gap flag.
+  input:
+    items:
+      - {name: spaghetti, quantity: 400, unit: g}
+  checks:
+    max_requests: 1
+    expect:
+      spaghetti:
+        coles: {products: [col-spaghetti-01, col-spaghetti-02], tiers: [exact, equivalent], best_value: true, packs: 1}
+        woolworths: {products: [wol-spaghetti-01, wol-spaghetti-02], tiers: [exact, equivalent], best_value: true, packs: 1}
+        pack_gap: false
+
+- id: price-multi-pack-quantities
+  agent: price
+  notes: >
+    Quantities that need several packs (2.4 kg of mince in 500 g packs, 2 kg of thigh in 1 kg
+    packs). Pack counts are computed by code and must be right; the cheapest standard product
+    is picked, not the premium line.
+  input:
+    items:
+      - {name: beef mince, quantity: 2400, unit: g}
+      - {name: chicken thigh, quantity: 2000, unit: g}
+  checks:
+    max_requests: 1
+    expect:
+      beef mince:
+        coles: {products: [col-beef-mince-01, col-beef-mince-02], tiers: [exact, equivalent], best_value: true, packs: 5}
+        woolworths: {products: [wol-beef-mince-01, wol-beef-mince-02], tiers: [exact, equivalent], best_value: true, packs: 5}
+      chicken thigh:
+        coles: {products: [col-chicken-thigh-01], tiers: [equivalent], packs: 2}
+        woolworths: {products: [wol-chicken-thigh-01], tiers: [equivalent], packs: 2}
+
+- id: price-generic-avoids-premium-line
+  agent: price
+  notes: >
+    Coles Finest and Woolworths Gold are the premium quality band. A generic request for eye
+    fillet, salmon or a whole chicken must not be filled with the premium line.
+  input:
+    items:
+      - {name: beef eye fillet, quantity: 800, unit: g}
+      - {name: salmon, quantity: 800, unit: g}
+      - {name: whole chicken, quantity: 1600, unit: g}
+  checks:
+    max_requests: 1
+    expect:
+      beef eye fillet:
+        coles: {products: [col-eye-fillet-01], tiers: [equivalent]}
+        woolworths: {products: [wol-eye-fillet-01], tiers: [equivalent]}
+      salmon:
+        coles: {products: [col-salmon-01], tiers: [equivalent]}
+        woolworths: {products: [wol-salmon-01], tiers: [equivalent]}
+      whole chicken:
+        coles: {products: [col-whole-chicken-01], tiers: [equivalent]}
+        woolworths: {products: [wol-whole-chicken-01], tiers: [equivalent]}
+
+- id: price-budget-house-vs-branded
+  agent: price
+  notes: >
+    Rice, pasta, beans and tomatoes have a budget-band house brand and a standard-band brand
+    at both stores. The cheapest acceptable product must be picked consistently, so no
+    tier_gap is flagged.
+  input:
+    items:
+      - {name: rice, quantity: 1000, unit: g}
+      - {name: penne, quantity: 500, unit: g}
+      - {name: baked beans, quantity: 840, unit: g}
+      - {name: diced tomatoes, quantity: 800, unit: g}
+  checks:
+    max_requests: 1
+    expect:
+      rice:
+        coles: {products: [col-rice-01, col-rice-02], tiers: [exact, equivalent], best_value: true}
+        woolworths: {products: [wol-rice-01, wol-rice-02], tiers: [exact, equivalent], best_value: true}
+        no_flags: [tier_gap]
+      penne:
+        coles: {products: [col-penne-01, col-penne-02], tiers: [exact, equivalent], best_value: true}
+        woolworths: {products: [wol-penne-01, wol-penne-02], tiers: [exact, equivalent], best_value: true}
+        no_flags: [tier_gap]
+      baked beans:
+        coles: {products: [col-baked-beans-01, col-baked-beans-02], tiers: [exact, equivalent], best_value: true, packs: 2}
+        woolworths: {products: [wol-baked-beans-01, wol-baked-beans-02], tiers: [exact, equivalent], best_value: true, packs: 2}
+        no_flags: [tier_gap]
+      diced tomatoes:
+        coles: {products: [col-diced-tomatoes-01, col-diced-tomatoes-02], tiers: [exact, equivalent], best_value: true, packs: 2}
+        woolworths: {products: [wol-diced-tomatoes-01, wol-diced-tomatoes-02], tiers: [exact, equivalent], best_value: true, packs: 2}
+        no_flags: [tier_gap]
+
+- id: price-not-in-catalogue
+  agent: price
+  notes: >
+    Items the seed does not sell at all. The agent may mark them not found or offer a
+    substitute (it may retry once, so 2 requests), but must never claim a usable match.
+    Eggs are a control that must still match normally.
+  input:
+    items:
+      - {name: dragon fruit, quantity: 500, unit: g}
+      - {name: saffron, quantity: 5, unit: g}
+      - {name: eggs, quantity: 12, unit: each}
+  checks:
+    max_requests: 2
+    expect:
+      dragon fruit:
+        coles: {tiers: [not_found, substitute]}
+        woolworths: {tiers: [not_found, substitute]}
+      saffron:
+        coles: {tiers: [not_found, substitute]}
+        woolworths: {tiers: [not_found, substitute]}
+      eggs:
+        coles: {products: [col-eggs-01, col-eggs-02], tiers: [exact, equivalent]}
+        woolworths: {products: [wol-eggs-01, wol-eggs-02], tiers: [exact, equivalent]}
+
+- id: price-named-brand-not-sold
+  agent: price
+  notes: >
+    The user named a brand the catalogue does not carry (Heinz). Only that brand is searched,
+    so there is nothing to pick: not found at both stores, never a different brand. Rice is a
+    control without a brand.
+  input:
+    items:
+      - {name: tomato sauce, quantity: 500, unit: ml, brand: Heinz}
+      - {name: rice, quantity: 1000, unit: g}
+  checks:
+    max_requests: 2
+    expect:
+      tomato sauce:
+        coles: {tiers: [not_found]}
+        woolworths: {tiers: [not_found]}
+      rice:
+        coles: {products: [col-rice-01, col-rice-02], tiers: [exact, equivalent]}
+        woolworths: {products: [wol-rice-01, wol-rice-02], tiers: [exact, equivalent]}

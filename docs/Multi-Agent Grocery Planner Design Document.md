@@ -225,21 +225,27 @@ Tracing shows what each run did, and evals show whether a prompt or model change
 - Run summaries and parameters live in the `runs` table, with the Langfuse trace ID stored on each run so the two link up. Langfuse keeps 30 days; the `run_steps` records are the permanent record.
 - The public "how it worked" panel reads from the app's own `run_steps` records, not from Langfuse, so it works on shared links without exposing the tracing account.
 
-**Evals:** about 30 to 40 cases, split by agent.
+**Evals:** 37 cases in `backend/evals/cases/*.yaml`, split by agent. Each case has an id, the agent, an input, a set of checks and a note on why it exists. **Every check is deterministic; there is no LLM judge yet.** A judge is a later addition if a fuzzy question (for example whether a potato salad list is sensible) turns out to matter.
 
-| Agent | What is checked | Method |
-| --- | --- | --- |
-| Ingredient | Key ingredients present, quantities in a sensible range, avoid list respected, schema valid | Deterministic checks; LLM judge only for fuzzy cases such as whether a potato salad list is sensible |
-| Price | Matches are correct, exact vs equivalent vs substitute labelled properly | Deterministic checks against the seeded catalogue |
-| Planner | Says "no meaningful difference" on near-identical seeded baskets; picks the right store when the gap is large | Deterministic checks on the verdict |
+| Agent | Cases | What is checked | Method |
+| --- | ---: | --- | --- |
+| Ingredient | 12 | Required vocabulary items present (any-of groups allowed); per-serving quantity inside a range per item; forbidden items absent for each avoid (word lists, so coconut milk is not dairy); a brand only when the dish names one; merged lines list every meal that uses them; schema valid; one request | Checks on the typed output. Cases include classic dishes, a shared-ingredient merge, avoid dairy, nuts and gluten, a contradiction (creamy and dairy-free), an odd dish name and a prompt-injection dish name |
+| Price | 12 | Product is in the allowed set for that store; tier is one of the allowed tiers; `not_found` where the seed lacks the product; exact for a named brand; `pack_gap` raised or absent as designed; the special is picked when it is the best value; best value among the acceptable products; pack counts; at most two requests; downgrades counted | Checks against the seeded catalogue. The input is a fixed ingredient list |
+| Planner | 10 | Recommendation, store, override and its reason (`special_dependency`, `match_quality`); every dollar figure in the text is a number code provided or a tool returned; tip rules; confidence level; the what-if tool is only called when a split can win | Checks against the saved price-agent fixtures and constructed baskets. Code fixes the rule verdict, confidence and flags, so those are asserted offline as well |
+| End to end | 3 | The run completes, within the 9-request budget, with the expected recommendation | Full orchestrator runs |
 
-**When they run:** in CI on every prompt or model change, with scores shown in the README.
+**How a run is made reproducible:** the runner uses the eval API key (`GEMINI_EVAL_API_KEY`, never the demo's), `APP_ENV=eval`, `bypass_cache=True` (nothing read from or written to the dish cache), the fallback model switched off so one pinned model answers (a case fails if anything else did), and a fixed `as_of` of 2026-10-12 so seeded specials and ages never drift. Temperature stays at the agents' 0.1, so a case can pass in one run and fail in the next; `--repeat N` measures that.
+
+**Scores and the baseline rule:** the runner reports cases passed over total per agent, a pass rate for every check name, and the requests, tokens, would-be cost, downgrades and repairs used. `evals/baseline.json` holds each agent's pass rate from the last approved run. A run fails (exit code 1) when any agent's pass rate is **more than 10 points below its baseline**, **below an absolute floor** (ingredient 85%, price 85%, planner 90%), or when any answer came from a fallback model. The end-to-end cases have no floor of their own: with three cases one failure is a 33-point drop. After a deliberate prompt or model change, the baseline is rewritten by hand (`--write-baseline`) and reviewed like code.
+
+**When they run:** in GitHub Actions, in `evals.yml`, on a push or pull request that touches the agents and their prompts, the model layer, the planner tools, the evals, the saved fixtures or the seeded catalogue, and on demand (`workflow_dispatch`, with a model and repeat count). The job summary shows the markdown report and the result JSON is uploaded as an artifact. Lint, unit tests and the integration tests against a throwaway Postgres run on every push in `ci.yml` and need no API key. The README shows the scores from the last approved run.
 
 **Practical points**
 
-- Evals use a separate API key or project, so CI cannot use up the demo's daily budget.
-- The eval set stays small, because a full run on the free tier is slow.
+- Evals use a separate API key or project, so CI cannot use up the demo's daily budget. The runner refuses to start without it, and refuses a key equal to the demo key.
+- The eval set stays small, because a full run on the free tier is slow: the per-minute limiter (12 requests a minute) makes a full run take several minutes.
 - Google may use free-tier inputs to improve its products, so no real personal data goes into eval cases or traces.
+- The expected values are written from the catalogue and the design rules, not from model output, and are reviewed before they become the baseline.
 
 ## Frontend
 

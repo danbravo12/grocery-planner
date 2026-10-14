@@ -1,0 +1,13 @@
+{
+ "status": "draft",
+ "note": "First run on the default model (gemini-3.1-flash-lite, 1 repeat, 2026-10-14) before the API degraded. Re-record with a clean --repeat 3 run once expected values are approved. Ingredient includes one wrong expectation that was later corrected.",
+ "recorded": "20261014T132123Z",
+ "model": "gemini-3.1-flash-lite",
+ "repeat": 1,
+ "pass_rates": {
+  "ingredient": 0.75,
+  "price": 1.0,
+  "planner": 1.0,
+  "e2e": 1.0
+ }
+}

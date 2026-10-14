@@ -1,0 +1,99 @@
+name: Evals
+
+# Runs the deterministic evals against the real model with the separate eval key
+# (GEMINI_EVAL_API_KEY), so CI can never use up the demo's daily budget. Triggers on changes
+# that can move the scores: agents and their prompts, the model layer, the evals themselves,
+# and the catalogue and fixtures the cases are built from.
+on:
+  push:
+    paths:
+      - "backend/grocery_planner/agents/**"
+      - "backend/grocery_planner/llm/**"
+      - "backend/grocery_planner/tools/**"
+      - "backend/evals/**"
+      - "backend/tests/fixtures/**"
+      - "backend/tests/helpers.py"
+      - "db/seed/**"
+      - ".github/workflows/evals.yml"
+  pull_request:
+    paths:
+      - "backend/grocery_planner/agents/**"
+      - "backend/grocery_planner/llm/**"
+      - "backend/grocery_planner/tools/**"
+      - "backend/evals/**"
+      - "backend/tests/fixtures/**"
+      - "backend/tests/helpers.py"
+      - "db/seed/**"
+      - ".github/workflows/evals.yml"
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "Model id (empty = the app default)"
+        required: false
+        default: ""
+      repeat:
+        description: "Run the whole set this many times"
+        required: false
+        default: "1"
+
+permissions:
+  contents: read
+
+# One eval run at a time: they share the eval key's per-minute and daily quota.
+concurrency:
+  group: evals
+  cancel-in-progress: false
+
+env:
+  UV_VERSION: "0.13.1"
+  PYTHON_VERSION: "3.12.15"
+
+jobs:
+  evals:
+    name: Evals
+    # Fork PRs cannot read secrets, so they are skipped rather than failed.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      APP_ENV: eval
+      GEMINI_EVAL_API_KEY: ${{ secrets.GEMINI_EVAL_API_KEY }}
+      EVAL_MODEL: ${{ inputs.model }}
+      EVAL_REPEAT: ${{ inputs.repeat || '1' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+      - run: uv sync --frozen
+      - name: Require the eval key
+        run: |
+          if [ -z "$GEMINI_EVAL_API_KEY" ]; then
+            echo "::error::The GEMINI_EVAL_API_KEY repository secret is not set. Run: gh secret set GEMINI_EVAL_API_KEY"
+            exit 1
+          fi
+      - name: Run evals
+        run: |
+          args=(--repeat "$EVAL_REPEAT")
+          if [ -n "$EVAL_MODEL" ]; then args+=(--model "$EVAL_MODEL"); fi
+          uv run python -m evals.run "${args[@]}"
+      - name: Post the summary
+        if: always()
+        run: |
+          latest=$(ls -t evals/results/*.md 2>/dev/null | head -n 1 || true)
+          if [ -n "$latest" ]; then cat "$latest" >> "$GITHUB_STEP_SUMMARY"; fi
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: eval-results
+          path: |
+            backend/evals/results/*.json
+            backend/evals/results/*.md
+          if-no-files-found: ignore
