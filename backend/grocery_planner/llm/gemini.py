@@ -7,6 +7,7 @@ retries and the schema repair itself.
 
 import json
 import random
+import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -32,10 +33,12 @@ from grocery_planner.llm.types import (
     execute_tool,
 )
 
-DEFAULT_MODEL = "gemini-3.5-flash-lite"
-MAX_ATTEMPTS = 3  # attempts per request, including the first
-BACKOFF_SECONDS = (1.0, 2.0, 4.0)  # before retry n; only the first MAX_ATTEMPTS - 1 are used
-TIMEOUT_MS = 30_000
+DEFAULT_MODEL = "gemini-3.1-flash-lite"
+MAX_ATTEMPTS = 3  # attempts per request, including the first (5xx, per-minute and unknown 429)
+TIMEOUT_ATTEMPTS = 2  # timeouts and 504 DEADLINE_EXCEEDED: fail faster, one retry only
+BACKOFF_SECONDS = (1.0, 2.0)  # before retry n
+RETRY_DELAY_CAP = 20.0  # longest retryDelay hint we will wait out
+TIMEOUT_MS = 20_000
 
 
 def classify_429(err: errors.APIError) -> str:
@@ -46,6 +49,18 @@ def classify_429(err: errors.APIError) -> str:
     if "perminute" in text or "per minute" in text:
         return "per_minute"
     return "unknown"
+
+
+def retry_delay_hint(err: errors.APIError) -> float | None:
+    """Seconds Google asks us to wait: RetryInfo.retryDelay ("39s"), else "retry in 39.5s"."""
+    details = err.details.get("error", err.details) if isinstance(err.details, dict) else {}
+    for item in details.get("details", []) if isinstance(details, dict) else []:
+        if isinstance(item, dict) and "retryDelay" in item:
+            m = re.fullmatch(r"\s*([\d.]+)s\s*", str(item["retryDelay"]))
+            if m:
+                return float(m.group(1))
+    m = re.search(r"retry in ([\d.]+)\s*s", str(err.message), re.IGNORECASE)
+    return float(m.group(1).rstrip(".")) if m else None
 
 
 @dataclass
@@ -68,6 +83,7 @@ class GeminiClient:
         sleep: Callable[[float], None] = time.sleep,
         rng: random.Random | None = None,
         clock: Callable[[], float] = time.perf_counter,
+        single_shot: bool = False,
     ) -> None:
         self.model = model or getenv("GEMINI_MODEL") or DEFAULT_MODEL
         self.thinking_level = thinking_level  # None = leave the model's default
@@ -75,6 +91,7 @@ class GeminiClient:
         self._sleep = sleep
         self._rng = rng or random.Random()
         self._clock = clock
+        self._single_shot = single_shot  # one send, no retries, no repair (used by the probe)
         if genai_client is None:
             key = api_key or getenv("GEMINI_API_KEY")
             if not key:
@@ -172,10 +189,10 @@ class GeminiClient:
             self._on_request(delta)
 
     def _request(self, call: _Call, contents: list, config: types.GenerateContentConfig):
-        """One logical request: up to MAX_ATTEMPTS sends. Every send is counted."""
-        failure: Exception | None = None
-        kind = "unknown"
-        for attempt in range(MAX_ATTEMPTS):
+        """One logical request, retried per the failure type. Every send is counted."""
+        attempt = 0
+        while True:
+            attempt += 1
             try:
                 response = self._genai.models.generate_content(
                     model=self.model, contents=contents, config=config
@@ -187,10 +204,21 @@ class GeminiClient:
                 kind = classify_429(e)
                 if kind == "per_day":
                     raise QuotaExhausted("per_day", str(e.message)) from e
-                failure = e
+                hint = retry_delay_hint(e)
+                if hint is not None and hint > RETRY_DELAY_CAP:
+                    raise QuotaExhausted("per_minute", f"retry delay {hint:g}s") from e
+                delay = (
+                    hint + self._rng.uniform(0, 0.5) if hint is not None else self._backoff(attempt)
+                )
+                if attempt >= self._limit(MAX_ATTEMPTS):
+                    raise QuotaExhausted(kind, str(e.message)) from e
             except (errors.ServerError, httpx.TransportError, TimeoutError) as e:
                 self._emit(call, Usage(requests=1))
-                kind, failure = "", e
+                is_timeout = not isinstance(e, errors.ServerError) or e.code == 504
+                limit = self._limit(TIMEOUT_ATTEMPTS if is_timeout else MAX_ATTEMPTS)
+                if attempt >= limit:
+                    raise LLMUnavailable(f"{type(e).__name__} after {attempt} attempts") from e
+                delay = self._backoff(attempt)
             else:
                 um = response.usage_metadata
                 self._emit(
@@ -203,12 +231,14 @@ class GeminiClient:
                     ),
                 )
                 return response
-            if attempt < MAX_ATTEMPTS - 1:
-                base = BACKOFF_SECONDS[attempt]
-                self._sleep(base + self._rng.uniform(0, 0.25 * base))
-        if kind:  # a 429 that outlasted every retry
-            raise QuotaExhausted(kind, str(getattr(failure, "message", failure))) from failure
-        raise LLMUnavailable(f"{type(failure).__name__} after {MAX_ATTEMPTS} attempts") from failure
+            self._sleep(delay)
+
+    def _backoff(self, attempt: int) -> float:
+        base = BACKOFF_SECONDS[min(attempt, len(BACKOFF_SECONDS)) - 1]
+        return base + self._rng.uniform(0, 0.25 * base)
+
+    def _limit(self, attempts: int) -> int:
+        return 1 if self._single_shot else attempts
 
     def _finish[T: BaseModel](
         self,
@@ -222,6 +252,8 @@ class GeminiClient:
         """Validate the final text with Pydantic; one repair request on failure."""
         text = _text(response)
         parsed, problems = _parse(output_type, text)
+        if parsed is None and self._single_shot:
+            raise SchemaValidationFailed([text], problems)
         if parsed is None:
             call.repair_used = True
             repair = [

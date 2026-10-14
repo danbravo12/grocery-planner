@@ -91,18 +91,23 @@ def tool_call(name: str, args: dict, inp=10, out=1, think=0):
     )
 
 
-def api_error(cls, code, status, quota_id=None, message="boom"):
+def api_error(cls, code, status, quota_id=None, message="boom", retry_delay=None):
     details = []
     if quota_id:
-        details = [{"@type": "type.googleapis.com/google.rpc.QuotaFailure",
-                    "violations": [{"quotaId": quota_id}]}]  # fmt: skip
+        details.append({"@type": "type.googleapis.com/google.rpc.QuotaFailure",
+                        "violations": [{"quotaId": quota_id}]})  # fmt: skip
+    if retry_delay:
+        details.append(
+            {"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": retry_delay}
+        )
     body = {"error": {"code": code, "status": status, "message": message, "details": details}}
     return cls(code, body)
 
 
-def per_minute():
+def per_minute(retry_delay=None):
     return api_error(errors.ClientError, 429, "RESOURCE_EXHAUSTED",
-                     "GenerateRequestsPerMinutePerProjectPerModel-FreeTier")  # fmt: skip
+                     "GenerateRequestsPerMinutePerProjectPerModel-FreeTier",
+                     retry_delay=retry_delay)  # fmt: skip
 
 
 def per_day():
@@ -110,12 +115,17 @@ def per_day():
                      "GenerateRequestsPerDayPerProjectPerModel-FreeTier")  # fmt: skip
 
 
-def unknown_429(message="Resource exhausted"):
-    return api_error(errors.ClientError, 429, "RESOURCE_EXHAUSTED", message=message)
+def unknown_429(message="Resource exhausted", retry_delay=None):
+    return api_error(errors.ClientError, 429, "RESOURCE_EXHAUSTED", message=message,
+                     retry_delay=retry_delay)  # fmt: skip
 
 
 def unavailable():
     return api_error(errors.ServerError, 503, "UNAVAILABLE")
+
+
+def deadline_exceeded():
+    return api_error(errors.ServerError, 504, "DEADLINE_EXCEEDED")
 
 
 class Harness:
@@ -123,6 +133,7 @@ class Harness:
         self.genai = FakeGenai(script)
         self.sleeps: list[float] = []
         self.hook: list[Usage] = []
+        kw.setdefault("model", "test-model")
         self.client = GeminiClient(
             genai_client=self.genai,
             sleep=self.sleeps.append,
@@ -146,7 +157,7 @@ def run(script, **kw):
 def test_valid_first_try_and_request_config():
     h = run([text(GOOD)])
     r = h.client.generate("sys", "hello", Out)
-    assert r.parsed == Out(answer="ok", n=3) and r.model == "gemini-3.5-flash-lite"
+    assert r.parsed == Out(answer="ok", n=3) and r.model == "test-model"
     assert (r.attempts, r.repair_used, r.tool_calls) == (1, False, [])
     assert r.usage == Usage(requests=1, input_tokens=10, output_tokens=5, thinking_tokens=2)
     cfg = h.sent[0]["config"]
@@ -155,7 +166,7 @@ def test_valid_first_try_and_request_config():
     assert cfg.response_json_schema == Out.model_json_schema()
     assert cfg.temperature == 0.1 and cfg.system_instruction == "sys"
     assert cfg.thinking_config.thinking_level == types.ThinkingLevel.MINIMAL
-    assert cfg.http_options.timeout == 30_000 and cfg.tools is None
+    assert cfg.http_options.timeout == 20_000 and cfg.tools is None
 
 
 def test_thinking_level_is_configurable_and_can_be_left_default():
@@ -194,19 +205,37 @@ def test_empty_reply_goes_through_repair():
 # ---- retries and 429s ----------------------------------------------------------------------
 
 
-def test_retry_then_succeed_with_backoff():
-    h = run([unavailable(), httpx.ReadTimeout("slow"), text(GOOD)])
+def test_default_model_and_env_override(monkeypatch):
+    monkeypatch.setenv("GEMINI_MODEL", "")
+    assert GeminiClient(genai_client=FakeGenai([])).model == "gemini-3.1-flash-lite"
+    monkeypatch.setenv("GEMINI_MODEL", "some-other-model")
+    assert GeminiClient(genai_client=FakeGenai([])).model == "some-other-model"
+
+
+def test_5xx_retry_then_succeed_with_backoff():
+    h = run([unavailable(), unavailable(), text(GOOD)])
     r = h.client.generate("s", "u", Out)
     assert r.parsed.n == 3 and r.attempts == 3
     assert len(h.sleeps) == 2
     assert 1.0 <= h.sleeps[0] <= 1.25 and 2.0 <= h.sleeps[1] <= 2.5
 
 
-def test_gives_up_after_three_attempts():
+def test_5xx_gives_up_after_three_attempts():
     h = run([unavailable()] * 3)
     with pytest.raises(LLMUnavailable):
         h.client.generate("s", "u", Out)
     assert len(h.sent) == 3 and len(h.sleeps) == 2 and len(h.hook) == 3
+
+
+@pytest.mark.parametrize("failure", [httpx.ReadTimeout("slow"), deadline_exceeded, TimeoutError])
+def test_timeouts_and_504_get_one_retry_only(failure):
+    make = failure if callable(failure) and not isinstance(failure, Exception) else lambda: failure
+    h = run([make(), text(GOOD)])
+    assert h.client.generate("s", "u", Out).attempts == 2  # a retry works
+    h = run([make(), make(), text(GOOD)])
+    with pytest.raises(LLMUnavailable):
+        h.client.generate("s", "u", Out)
+    assert len(h.sent) == 2 and len(h.sleeps) == 1 and len(h.hook) == 2  # third reply never sent
 
 
 def test_per_day_429_is_not_retried():
@@ -228,6 +257,55 @@ def test_per_minute_429_that_persists_raises_quota_exhausted():
     with pytest.raises(QuotaExhausted) as e:
         h.client.generate("s", "u", Out)
     assert e.value.kind == "per_minute" and len(h.sent) == 3
+
+
+def test_retry_delay_hint_under_cap_is_used_instead_of_backoff():
+    h = run([per_minute("7s"), text(GOOD)])
+    assert h.client.generate("s", "u", Out).attempts == 2
+    assert 7.0 <= h.sleeps[0] <= 7.5
+    h = run([unknown_429(retry_delay="12.5s"), text(GOOD)])
+    h.client.generate("s", "u", Out)
+    assert 12.5 <= h.sleeps[0] <= 13.0
+
+
+def test_retry_delay_hint_in_message_is_used():
+    h = run([unknown_429("Quota hit. Please retry in 3.2s."), text(GOOD)])
+    h.client.generate("s", "u", Out)
+    assert 3.2 <= h.sleeps[0] <= 3.7
+
+
+def test_retry_delay_at_the_cap_is_still_waited_out():
+    h = run([per_minute("20s"), text(GOOD)])
+    h.client.generate("s", "u", Out)
+    assert 20.0 <= h.sleeps[0] <= 20.5
+
+
+@pytest.mark.parametrize(
+    "make", [lambda: per_minute("39s"), lambda: unknown_429(retry_delay="21s")]
+)
+def test_retry_delay_hint_over_cap_raises_at_once(make):
+    h = run([make(), text(GOOD)])
+    with pytest.raises(QuotaExhausted) as e:
+        h.client.generate("s", "u", Out)
+    assert e.value.kind == "per_minute"
+    assert len(h.sent) == 1 and h.sleeps == []
+
+
+def test_no_hint_falls_back_to_backoff():
+    h = run([per_minute(), unknown_429(), text(GOOD)])
+    h.client.generate("s", "u", Out)
+    assert 1.0 <= h.sleeps[0] <= 1.25 and 2.0 <= h.sleeps[1] <= 2.5
+
+
+def test_single_shot_sends_once_and_never_repairs():
+    h = run([unavailable(), text(GOOD)], single_shot=True)
+    with pytest.raises(LLMUnavailable):
+        h.client.generate("s", "u", Out)
+    assert len(h.sent) == 1
+    h = run([text(BAD), text(GOOD)], single_shot=True)
+    with pytest.raises(SchemaValidationFailed):
+        h.client.generate("s", "u", Out)
+    assert len(h.sent) == 1
 
 
 def test_unknown_429_is_retried_then_raised():

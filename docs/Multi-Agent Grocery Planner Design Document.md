@@ -28,7 +28,7 @@ A run moves through three agents in a fixed order, and only the planner can send
 **Stack**
 
 - **Backend:** Python and FastAPI, one background task per run, SSE for progress
-- **Agents:** Gemini 3.5 Flash-Lite (free tier) behind a swappable model layer (a thin in-house layer over the google-genai SDK)
+- **Agents:** Gemini 3.1 Flash-Lite (free tier) behind a swappable model layer (a thin in-house layer over the google-genai SDK)
 - **Data:** Supabase Postgres
 - **Tracing:** Langfuse, plus step records in the app's own database for the public trace panel
 - **Frontend:** React and Vite
@@ -265,11 +265,11 @@ Every parameter has a default and a clamped range, and the values used are store
 | People per meal | None | 1 to 12 | Form field |
 | Days per meal | None | 1 to 14 | Form field |
 | Include pantry staples | Off | On or off | Yes |
-| Model | Gemini 3.5 Flash-Lite, free tier | Swappable | No |
+| Model | Gemini 3.1 Flash-Lite, free tier | Swappable | No |
 | Daily budget | 70% of 500 requests/day = 350 requests | Fixed | No |
 | Daily reset boundary | Midnight Pacific time, matching Google's quota reset | Fixed | No |
 | In-flight buffer | 15% of the daily budget (about 52 requests) | Fixed | No |
-| Retries | 3 attempts in total, backoff of 1s then 2s plus jitter (4s if a fourth attempt is ever allowed), 30s timeout per call | Fixed | No |
+| Retries | 20s timeout; timeouts/504 retried once; other transient errors 3 attempts with backoff 1s, 2s plus jitter; 429s honour retryDelay up to 20s | Fixed | No |
 | Schema repair | 1 attempt when an agent's output fails validation | Fixed | No |
 | Loop-back count | 1 | Fixed | No |
 
@@ -279,6 +279,7 @@ Every parameter has a default and a clamped range, and the values used are store
 | --- | --- | --- |
 | Prices are seeded, not live | Scraping is brittle and may breach store terms | A live source behind the same lookup interface, with freshness checks |
 | Per-visitor limits use a cookie and IP | No accounts, to keep friction low | Authenticated users and per-account quotas |
+| Default model is 3.1 Flash-Lite, not 3.5 | 3.5 Flash-Lite timed out for this project at build time | 3.1 is the default and the probe command (`python -m grocery_planner.llm.probe --model gemini-3.5-flash-lite`) re-checks 3.5 with one request |
 | One free-tier model provider | Cost | A swappable model layer already exists; add fallback providers and paid quota |
 | Free-tier quota can run out for the day | Cost | Paid tier, request queue and priority for in-flight runs |
 | Fixed agent sequence with one loop-back | Predictable and cheap | A supervisor that chooses steps, if evals show it helps |
@@ -288,7 +289,7 @@ Every parameter has a default and a clamped range, and the values used are store
 
 ## Open items to decide before building
 
-- [ ] Read the Gemini 3.5 Flash-Lite limits from the AI Studio rate-limit page, then set the daily budget and buffer
+- [ ] Read the Gemini 3.1 Flash-Lite limits from the AI Studio rate-limit page, then set the daily budget and buffer
 - [x] Check Google's deprecations page for 2.5 Flash-Lite before building (done: 2.5 is limited to existing users, so the build uses 3.5)
 - [ ] Hosting that allows long-lived streaming responses
 - [ ] Whether the first seeded catalogue covers Aldi or only Coles and Woolworths
