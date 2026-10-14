@@ -4,7 +4,7 @@ Regenerate from live runs with:
     SAVE_PRICE_FIXTURES=1 uv run pytest -m live tests/test_price_live.py
 """
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 
@@ -76,3 +76,35 @@ def split_scenario() -> PriceFixture:
         for r in items
     ]
     return base.model_copy(update={"name": "e", "items": items})
+
+
+def _mince_rows(items: list[PricedItem]) -> tuple[str, PricedItem]:
+    wool = next(r for r in items if r.item_name == "beef mince" and r.store == Store.WOOLWORTHS)
+    return wool.item_id, wool
+
+
+def special_tomorrow_scenario() -> PriceFixture:
+    """Fixture b where Woolworths beef mince is $42.00 on a special ending tomorrow (Coles
+    $52.00). Woolworths is $11.40 cheaper overall, so code says one_store, but without the
+    special the gap is $1.00: expect an override to no_meaningful_difference with
+    special_dependency."""
+    base = load_price_fixture("b")
+    _, wool = _mince_rows(base.items)
+    special = with_total(wool, "42.00").model_copy(
+        update={"on_special": True, "special_end_date": base.as_of + timedelta(days=1)}
+    )
+    items = [special if r is wool else r for r in base.items]
+    return base.model_copy(update={"name": "f", "items": items})
+
+
+def doubtful_match_scenario() -> PriceFixture:
+    """Fixture b where the whole saving comes from beef mince at Woolworths ($42.00 vs $52.00)
+    and that pick is doubtful: a branded product against Coles' house brand (tier gap) with low
+    confidence. Code says one_store; match_quality is the available reason to override."""
+    base = load_price_fixture("b")
+    _, wool = _mince_rows(base.items)
+    doubtful = with_total(wool, "42.00").model_copy(
+        update={"brand": "Kingsway", "brand_label": "branded", "match_confidence": "low"}
+    )
+    items = [doubtful if r is wool else r for r in base.items]
+    return base.model_copy(update={"name": "g", "items": items})

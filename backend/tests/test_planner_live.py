@@ -11,7 +11,13 @@ from grocery_planner.config import ACTIVE_STORES
 from grocery_planner.domain import PlannerConfig
 from grocery_planner.env import getenv
 from grocery_planner.llm import GeminiClient
-from tests.fixtures import large_gap_scenario, load_price_fixture, split_scenario
+from tests.fixtures import (
+    doubtful_match_scenario,
+    large_gap_scenario,
+    load_price_fixture,
+    special_tomorrow_scenario,
+    split_scenario,
+)
 
 pytestmark = pytest.mark.live
 CFG = PlannerConfig()
@@ -75,3 +81,14 @@ def test_d_large_gap(llm):
 def test_e_split(llm):
     r = go("(e) beef mince $10 cheaper at Woolworths", split_scenario(), llm)
     assert r.recommendation == "split"
+
+
+def test_f_saving_only_from_a_special_ending_tomorrow(llm):
+    r = go("(f) beef mince special at Woolworths ends tomorrow", special_tomorrow_scenario(), llm)
+    assert r.rule_verdict.kind == "one_store"
+    assert r.overridden is True and r.override_reason == "special_dependency"
+
+
+def test_g_saving_only_from_a_doubtful_match(llm):
+    r = go("(g) beef mince saving rests on a doubtful match", doubtful_match_scenario(), llm)
+    assert r.rule_verdict.kind == "one_store" and r.confidence == "low"

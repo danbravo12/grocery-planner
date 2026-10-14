@@ -206,6 +206,7 @@ def run_ingredient_agent(
 
     # 3. One model call for everything uncached; nothing is cached unless it all validates.
     usage = Usage()
+    model, fell_back = "", False
     if misses:
         payload = {
             "dishes": [
@@ -222,6 +223,7 @@ def run_ingredient_agent(
             SYSTEM_PROMPT, json.dumps(payload, separators=(",", ":")), output_type, temperature=0.1
         )
         usage = result.usage
+        model, fell_back = result.model, result.fell_back
         by_id = {d.dish_id: d for d in result.parsed.dishes}
         for d in misses:
             dish_result = _canonical(
@@ -231,9 +233,10 @@ def run_ingredient_agent(
             if not bypass_cache:
                 cache.put(*d.key, d.dish_name, dish_result, result.model)
 
-    return _assemble(
+    listing = _assemble(
         request, dishes, results, vocab, usage, CacheStats(hits=hits, misses=len(misses))
     )
+    return listing.model_copy(update={"model": model, "fell_back": fell_back})
 
 
 # ---- deterministic assembly ----------------------------------------------------------------

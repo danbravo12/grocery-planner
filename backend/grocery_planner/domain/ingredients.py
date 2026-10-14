@@ -63,3 +63,5 @@ class IngredientList(BaseModel):
     assumptions: list[str]
     usage: Usage
     cache: CacheStats
+    model: str = ""  # the model that answered; empty when everything came from the cache
+    fell_back: bool = False

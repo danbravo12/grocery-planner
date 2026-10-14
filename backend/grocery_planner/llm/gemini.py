@@ -94,6 +94,8 @@ class GeminiClient:
         self.model = model or getenv("GEMINI_MODEL") or DEFAULT_MODEL
         if fallback_model is _FROM_ENV:
             fallback_model = getenv("GEMINI_FALLBACK_MODEL") or DEFAULT_FALLBACK_MODEL
+            if fallback_model.strip().lower() in ("none", "off", "disabled"):
+                fallback_model = None  # pinned runs, e.g. evals
         # None (or the same model) means no fallback. Never used by the single-shot probe.
         self.fallback_model = (
             None if single_shot or fallback_model == self.model else fallback_model
@@ -137,10 +139,23 @@ class GeminiClient:
             by_name = {t.name: t for t in tools}
             plain = self._config(system, temperature, output_type, tools=None)
             config = self._config(system, temperature, output_type, tools=tools)
+            # Once the allowed rounds are used up, the next request must be the answer: tool
+            # calling is switched off for it rather than letting the model ask again.
+            answer_now = config.model_copy(
+                update={
+                    "tool_config": types.ToolConfig(
+                        function_calling_config=types.FunctionCallingConfig(
+                            mode=types.FunctionCallingConfigMode.NONE
+                        )
+                    )
+                }
+            )
             contents = [_user(user)]
             rounds = 0
             while True:
-                response = self._request(call, contents, config)
+                response = self._request(
+                    call, contents, answer_now if rounds >= max_tool_rounds else config
+                )
                 function_calls = response.function_calls or []
                 if not function_calls:
                     return self._finish(call, start, contents, response, output_type, plain)

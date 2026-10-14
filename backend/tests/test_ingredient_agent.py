@@ -418,3 +418,13 @@ def test_invented_brand_fails_validation_and_is_repaired():
 
 def test_brand_field_is_in_the_system_prompt():
     assert "ONLY when the dish text explicitly names a brand" in SYSTEM_PROMPT
+
+
+def test_result_records_the_answering_model_and_blank_when_cached():
+    cache = InMemoryDishCache()
+    first = run_ingredient_agent(
+        req(meal(mains=["pilaf"])), FakeLLMClient([batch(dish("d1", ing("rice", 80)))]), cache
+    )
+    assert (first.model, first.fell_back) == ("fake-model", False)
+    cached = run_ingredient_agent(req(meal(mains=["pilaf"])), FakeLLMClient([]), cache)
+    assert (cached.model, cached.fell_back) == ("", False)

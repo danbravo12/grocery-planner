@@ -580,3 +580,46 @@ def test_fallback_model_comes_from_env_with_a_default(monkeypatch):
     )
     monkeypatch.setenv("GEMINI_FALLBACK_MODEL", "other-fallback")
     assert GeminiClient(genai_client=FakeGenai([]), model="x").fallback_model == "other-fallback"
+
+
+@pytest.mark.parametrize("value", ["none", "NONE", "off", " Disabled "])
+def test_fallback_can_be_switched_off_from_the_environment(monkeypatch, value):
+    monkeypatch.setenv("GEMINI_FALLBACK_MODEL", value)
+    client = GeminiClient(
+        genai_client=FakeGenai([unavailable()] * 3 + [text(GOOD)]), model="x", sleep=lambda s: None
+    )
+    assert client.fallback_model is None  # pinned: evals see the primary model or an error
+    with pytest.raises(LLMUnavailable):
+        client.generate("s", "u", Out)
+
+
+def test_after_the_allowed_rounds_the_next_request_must_answer():
+    h = run([tool_call("add", {"a": 1, "b": 2}), tool_call("add", {"a": 3, "b": 4}), text(GOOD)])
+    r = with_tools(h, rounds=2)
+    assert r.parsed.n == 3 and r.attempts == 3 and len(r.tool_calls) == 2
+    modes = [c["config"].tool_config for c in h.sent]
+    assert modes[0] is None and modes[1] is None  # tools allowed in the first two requests
+    assert modes[2].function_calling_config.mode == types.FunctionCallingConfigMode.NONE
+    assert h.sent[2]["config"].tools  # still declared, so earlier function calls stay valid
+
+
+def test_a_model_that_ignores_the_no_tools_request_still_raises():
+    h = run(
+        [
+            tool_call("add", {"a": 1, "b": 1}),
+            tool_call("add", {"a": 2, "b": 2}),
+            tool_call("add", {"a": 3, "b": 3}),
+        ]
+    )
+    with pytest.raises(ToolLoopExceeded):
+        with_tools(h, rounds=2)
+    assert len(h.sent) == 3
+
+
+def test_zero_allowed_rounds_means_the_first_request_must_answer():
+    h = run([text(GOOD)])
+    with_tools(h, rounds=0)
+    assert (
+        h.sent[0]["config"].tool_config.function_calling_config.mode
+        == types.FunctionCallingConfigMode.NONE
+    )

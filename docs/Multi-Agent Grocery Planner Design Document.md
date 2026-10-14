@@ -130,7 +130,7 @@ This agent decides where it is worth shopping this week based on savings alone. 
 
 **Decision rule:** one threshold applies to every outcome: $8 or 8% of the basket, whichever is higher, set in config. A split only wins if its savings meet the threshold after accounting for the extra trip. Otherwise one store wins if its lead over the next cheapest store meets the threshold, and anything less is no meaningful difference. Code computes this rule verdict, and the agent follows it unless it states an override reason. If one store is cheaper overall but another is cheaper on one expensive item, the agent only recommends a split when it clears the threshold, and otherwise mentions the item as a tip.
 
-**Checks on the agent's output:** a recommendation that differs from the rule verdict needs an override reason (a special the result depends on, or doubtful matches); a split is recomputed by code and must meet the threshold; every dollar figure in the text must equal a number code provided or a tool returned. Anything else goes back to the agent for one repair.
+**Checks on the agent's output:** a recommendation that differs from the rule verdict needs an override reason (a special the result depends on, or doubtful matches); a result that depends on a special ending within a week must be overridden to no meaningful difference; a split is recomputed by code and must meet the threshold; tips are limited to items whose store difference is at least a quarter of the threshold, must give the end date when they mention a special, and assumptions may only cover data and pricing, never the shopper's preferences; every dollar figure in the text must equal a number code provided or a tool returned. Anything else goes back to the agent for one repair.
 
 **Incomplete baskets:** if a store lacks a few items, the planner compares on common items and flags the gap.
 
@@ -139,7 +139,7 @@ This agent decides where it is worth shopping this week based on savings alone. 
 - `recommendation`: one\_store (which), split (which items where), or no\_meaningful\_difference
 - `savings` and `reasoning` in plain language; a one-line summary is rendered by code from the numbers
 - `confidence`, computed by code from the share of comparable items, match confidence and tier or pack gaps (the agent does not set it)
-- `flags[]`: items missing at a store, savings from specials ending mid-week, substitute matches
+- `flags[]`: items missing at a store, specials ending within 7 days (information), specials the result depends on, substitute matches, tier and pack gaps
 - `assumptions[]`
 
 **Loop-back:** the planner may send low-confidence items back to the price agent once. After that it must decide with what it has.

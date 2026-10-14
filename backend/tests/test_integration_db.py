@@ -105,3 +105,17 @@ def test_dish_cache_round_trip():
         with psycopg.connect(db_url(), **CONNECT_KWARGS) as conn:
             conn.execute("DELETE FROM dish_cache WHERE dish_key = %s", (key[0],))
         cache.close()
+
+
+def test_answering_model_columns_exist():
+    with psycopg.connect(db_url(), **CONNECT_KWARGS) as conn:
+        cols = {
+            (r["table_name"], r["column_name"]): r["data_type"]
+            for r in conn.execute(
+                "SELECT table_name, column_name, data_type FROM information_schema.columns "
+                "WHERE table_schema = 'public' AND table_name IN ('runs', 'run_steps')"
+            )
+        }
+    assert cols[("run_steps", "model")] == "text"
+    assert cols[("run_steps", "fell_back")] == "boolean"
+    assert cols[("runs", "models")] == "ARRAY"
