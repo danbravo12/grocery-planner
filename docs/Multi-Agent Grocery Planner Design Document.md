@@ -28,7 +28,7 @@ A run moves through three agents in a fixed order, and only the planner can send
 **Stack**
 
 - **Backend:** Python and FastAPI, one background task per run, SSE for progress
-- **Agents:** Gemini 3.1 Flash-Lite (free tier) behind a swappable model layer (a thin in-house layer over the google-genai SDK)
+- **Agents:** Gemini 3.1 Flash-Lite (free tier) behind a swappable model layer (a thin in-house layer over the google-genai SDK). If the primary model is unavailable or out of its daily quota, the same call is retried once on a fallback model (Gemini 3.5 Flash-Lite by default)
 - **Data:** Supabase Postgres
 - **Tracing:** Langfuse, plus step records in the app's own database for the public trace panel
 - **Frontend:** React and Vite
@@ -122,21 +122,23 @@ This agent decides where it is worth shopping this week based on savings alone. 
 
 **Input:** each store's basket from the price agent (items, prices, match tiers, statuses).
 
-**Deterministic tools** (code does the arithmetic, the agent decides which to call and interprets the results):
+**Deterministic tools** (code does all the arithmetic before the call; during it the agent may call the what-if tool, at most two rounds, and interprets the results):
 
 - Basket total per store, on common items only
 - Per-item savings between stores
-- What-if split totals, e.g. "meat from store B, everything else from store A"
+- What-if split totals, e.g. "meat from store B, everything else from store A" (the one tool the agent can call itself)
 
 **Decision rule:** one threshold applies to every outcome: $8 or 8% of the basket, whichever is higher, set in config. A split only wins if its savings meet the threshold after accounting for the extra trip. Otherwise one store wins if its lead over the next cheapest store meets the threshold, and anything less is no meaningful difference. Code computes this rule verdict, and the agent follows it unless it states an override reason. If one store is cheaper overall but another is cheaper on one expensive item, the agent only recommends a split when it clears the threshold, and otherwise mentions the item as a tip.
+
+**Checks on the agent's output:** a recommendation that differs from the rule verdict needs an override reason (a special the result depends on, or doubtful matches); a split is recomputed by code and must meet the threshold; every dollar figure in the text must equal a number code provided or a tool returned. Anything else goes back to the agent for one repair.
 
 **Incomplete baskets:** if a store lacks a few items, the planner compares on common items and flags the gap.
 
 **Output**
 
 - `recommendation`: one\_store (which), split (which items where), or no\_meaningful\_difference
-- `savings` and `reasoning` in plain language
-- `confidence`, driven by match tiers and basket completeness
+- `savings` and `reasoning` in plain language; a one-line summary is rendered by code from the numbers
+- `confidence`, computed by code from the share of comparable items, match confidence and tier or pack gaps (the agent does not set it)
 - `flags[]`: items missing at a store, savings from specials ending mid-week, substitute matches
 - `assumptions[]`
 

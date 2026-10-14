@@ -130,14 +130,6 @@ def packs_needed(
     return packs, product.price * packs, product.pack_size * packs - qty
 
 
-def pack_size_within_tolerance(
-    needed_qty: Decimal | int, pack_size: Decimal | int, tolerance: Decimal = DEFAULT_TOLERANCE
-) -> bool:
-    """True when the pack is within `tolerance` (inclusive) of the needed size."""
-    needed = Decimal(needed_qty)
-    return abs(Decimal(pack_size) - needed) <= tolerance * needed
-
-
 def pack_gap_exceeds(quantities: Sequence[Decimal], tolerance: Decimal = DEFAULT_TOLERANCE) -> bool:
     """True when the purchased quantities differ by more than `tolerance`, relative to the
     smallest. Exactly at the tolerance is not a gap."""

@@ -47,13 +47,23 @@ class Usage:
     input_tokens: int = 0
     output_tokens: int = 0  # excludes thinking tokens
     thinking_tokens: int = 0
+    # The model that served the request(s). Per-request deltas carry one model; a sum over
+    # several models says "mixed". Not part of equality.
+    model: str | None = field(default=None, compare=False)
 
     def __add__(self, other: "Usage") -> "Usage":
+        if self.model is None or self.model == other.model:
+            model = other.model if self.model is None else self.model
+        elif other.model is None:
+            model = self.model
+        else:
+            model = "mixed"
         return Usage(
             self.requests + other.requests,
             self.input_tokens + other.input_tokens,
             self.output_tokens + other.output_tokens,
             self.thinking_tokens + other.thinking_tokens,
+            model,
         )
 
 
@@ -72,12 +82,14 @@ class ToolCallRecord:
 @dataclass(frozen=True)
 class LLMResult[T: BaseModel]:
     parsed: T
-    model: str
+    model: str  # the model that actually answered
     attempts: int  # requests sent for this call: first tries, retries, repairs, tool rounds
     repair_used: bool
     tool_calls: list[ToolCallRecord] = field(default_factory=list)
     usage: Usage = field(default_factory=Usage)
     latency_ms: int = 0
+    fell_back: bool = False  # the primary model was unavailable or out of daily quota
+    fallback_reason: str | None = None
 
 
 # ---- tools ----------------------------------------------------------------------------------

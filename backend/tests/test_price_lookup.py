@@ -7,7 +7,6 @@ from grocery_planner.domain import Store
 from grocery_planner.tools.price_lookup import (
     SeededFilePriceSource,
     UnitMismatchError,
-    pack_size_within_tolerance,
     packs_needed,
 )
 
@@ -89,19 +88,6 @@ def test_packs_needed_rejects_non_positive(source):
     p = by_id(source, "spaghetti", Store.COLES, "col-spaghetti-01")
     with pytest.raises(ValueError):
         packs_needed(0, "g", p)
-
-
-def test_tolerance_boundary_is_inclusive_at_exactly_15_percent():
-    assert pack_size_within_tolerance(Decimal(400), Decimal(460)) is True  # +15% exactly
-    assert pack_size_within_tolerance(Decimal(400), Decimal(340)) is True  # -15% exactly
-    assert pack_size_within_tolerance(Decimal(400), Decimal("460.01")) is False
-    assert pack_size_within_tolerance(Decimal(400), Decimal("339.99")) is False
-    assert pack_size_within_tolerance(400, 400) is True
-
-
-def test_tolerance_is_configurable():
-    assert pack_size_within_tolerance(400, 440, Decimal("0.05")) is False
-    assert pack_size_within_tolerance(400, 420, Decimal("0.05")) is True
 
 
 def test_decimal_arithmetic_has_no_float_drift(source):

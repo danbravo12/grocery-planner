@@ -3,6 +3,7 @@
 The ingredient lists come from the Postgres dish cache, so after the first run they cost 0
 ingredient requests. Prices use the seed catalogue at a fixed anchor of 2026-10-12."""
 
+import os
 import time
 from datetime import date
 from decimal import Decimal
@@ -21,6 +22,7 @@ from grocery_planner.env import getenv
 from grocery_planner.llm import GeminiClient
 from grocery_planner.tools.planner_math import coverage, format_money, rule_verdict, should_stop
 from grocery_planner.tools.price_lookup import SeededFilePriceSource
+from tests.fixtures import PriceFixture, save_price_fixture
 
 pytestmark = pytest.mark.live
 AS_OF = date(2026, 10, 12)
@@ -53,7 +55,8 @@ def report(label, items, result, seconds):
     u = result.usage
     print(f"\n=== {label} ===")
     print(
-        f"price agent: model calls={result.rounds} requests={u.requests} "
+        f"price agent: model={result.model} fell_back={result.fell_back} "
+        f"model calls={result.rounds} requests={u.requests} "
         f"input_tokens={u.input_tokens} output_tokens={u.output_tokens} "
         f"thinking_tokens={u.thinking_tokens} latency={seconds:.1f}s"
     )
@@ -99,9 +102,16 @@ def report(label, items, result, seconds):
     return result
 
 
-def go(label, items, llm, source):
+def go(label, items, llm, source, fixture=None):
     start = time.perf_counter()
     result = price_items(items, llm, source, CFG, AS_OF)
+    if fixture and os.environ.get("SAVE_PRICE_FIXTURES"):
+        path = save_price_fixture(
+            PriceFixture(
+                name=fixture, as_of=AS_OF, captured_with_model=result.model, items=result.items
+            )
+        )
+        print(f"saved fixture {path.name} (model {result.model})")
     return report(label, items, result, time.perf_counter() - start)
 
 
@@ -120,8 +130,8 @@ def test_a_friday_dinner(llm, cache, source):
         people=2, days=1,
     )  # fmt: skip
     items = ingredients(llm, cache, [meal])
-    result = go("(a) Friday dinner", items, llm, source)
-    assert result.usage.requests in (1, 2) and len(result.items) == 2 * len(items)
+    result = go("(a) Friday dinner", items, llm, source, "a")
+    assert result.rounds in (1, 2) and len(result.items) == 2 * len(items)
 
 
 def test_b_shared_onion_and_garlic(llm, cache, source):
@@ -130,8 +140,8 @@ def test_b_shared_onion_and_garlic(llm, cache, source):
         Meal(meal_name="Tuesday chilli", mains=["chilli con carne"], people=4, days=3),
     ]
     items = ingredients(llm, cache, meals)
-    result = go("(b) bolognese and chilli", items, llm, source)
-    assert result.usage.requests in (1, 2) and len(result.items) == 2 * len(items)
+    result = go("(b) bolognese and chilli", items, llm, source, "b")
+    assert result.rounds in (1, 2) and len(result.items) == 2 * len(items)
 
 
 def test_c_edge_cases(llm, source):
@@ -147,5 +157,5 @@ def test_c_edge_cases(llm, source):
         item(6, "tomato sauce", 500, "ml", brand="Bellvue"), item(7, "chicken breast", 1000),
         item(8, "milk", 2000, "ml"), item(9, "bread", 700), item(10, "eggs", 12, "each"),
     ]  # fmt: skip
-    result = go("(c) seeded edge cases", items, llm, source)
+    result = go("(c) seeded edge cases", items, llm, source, "c")
     assert len(result.items) == 20

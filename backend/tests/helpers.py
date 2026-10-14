@@ -3,7 +3,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from grocery_planner.domain import MatchTier, PricedItem, Store
+from grocery_planner.domain import MatchConfidence, MatchTier, PricedItem, Store
 from grocery_planner.tools.price_lookup import SeededFilePriceSource, packs_needed
 
 AS_OF = date(2026, 10, 12)
@@ -62,7 +62,13 @@ def not_found(item_id: str, store: Store, name: str = "thing") -> PricedItem:
     )  # fmt: skip
 
 
-def synthetic(item_id: str, store: Store, total: str, tier: MatchTier = "equivalent") -> PricedItem:
+def synthetic(
+    item_id: str,
+    store: Store,
+    total: str,
+    tier: MatchTier = "equivalent",
+    confidence: MatchConfidence = "high",
+) -> PricedItem:
     """A minimal row with a fixed cost, for rules that don't depend on seed data."""
     if tier == "not_found":
         return not_found(item_id, store)
@@ -85,7 +91,7 @@ def synthetic(item_id: str, store: Store, total: str, tier: MatchTier = "equival
         leftover_qty=Decimal(0),
         total_cost=cost,
         match_tier=tier,
-        match_confidence="high",
+        match_confidence=confidence,
         price_timestamp=datetime(2026, 10, 12),
         data_source="seeded",
     )

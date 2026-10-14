@@ -131,6 +131,8 @@ class PriceAgentResult(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     prompt_version: str = PRICE_PROMPT_VERSION
+    model: str = ""  # the model that answered the last call
+    fell_back: bool = False  # any call needed the fallback model
     items: list[PricedItem]  # one per item per store, in item then store order
     usage: Usage
     rounds: int  # model calls made: 1, or 2 when a retry round ran
@@ -255,6 +257,8 @@ def reprice(
 @dataclass
 class _Acc:
     usage: Usage = field(default_factory=Usage)
+    model: str = ""
+    fell_back: bool = False
     downgrades: list[Downgrade] = field(default_factory=list)
     flags: list[PriceFlag] = field(default_factory=list)
 
@@ -301,6 +305,8 @@ def _run(
     return PriceAgentResult(
         items=[_priced(st, store, as_of) for st in states for store in stores],
         usage=acc.usage,
+        model=acc.model,
+        fell_back=acc.fell_back,
         rounds=rounds,
         downgrades=acc.downgrades,
         flags=acc.flags,
@@ -332,6 +338,8 @@ def _ask(
         SYSTEM_PROMPT, json.dumps(payload, separators=(",", ":")), MatchBatch, temperature=0.1
     )
     acc.usage += result.usage
+    acc.model = result.model
+    acc.fell_back = acc.fell_back or result.fell_back
     return {o.item_id: o for o in result.parsed.items}
 
 

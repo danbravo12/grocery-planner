@@ -134,6 +134,7 @@ class Harness:
         self.sleeps: list[float] = []
         self.hook: list[Usage] = []
         kw.setdefault("model", "test-model")
+        kw.setdefault("fallback_model", None)  # fallback has its own tests below
         self.client = GeminiClient(
             genai_client=self.genai,
             sleep=self.sleeps.append,
@@ -456,3 +457,126 @@ def test_fake_client_runs_tools_for_real():
     )
     with pytest.raises(ToolLoopExceeded):
         too_many.generate_with_tools("s", "u", Out, [ADD], max_tool_rounds=2)
+
+
+# ---- model fallback ------------------------------------------------------------------------
+
+
+def with_fallback(script, **kw):
+    return run(script, fallback_model="backup-model", **kw)
+
+
+def models_sent(h):
+    return [c["model"] for c in h.sent]
+
+
+def test_fallback_on_503_after_primary_attempts_are_exhausted():
+    h = with_fallback([unavailable()] * 3 + [text(GOOD)])
+    r = h.client.generate("s", "u", Out)
+    assert r.parsed.n == 3 and r.model == "backup-model" and r.fell_back is True
+    assert r.fallback_reason == "unavailable"
+    assert models_sent(h) == ["test-model"] * 3 + ["backup-model"]
+    assert r.usage.requests == r.attempts == 4
+    assert [d.model for d in h.hook] == ["test-model"] * 3 + ["backup-model"]
+    assert r.usage.model == "mixed"
+
+
+def test_fallback_on_504_after_one_retry():
+    h = with_fallback([deadline_exceeded(), deadline_exceeded(), text(GOOD)])
+    r = h.client.generate("s", "u", Out)
+    assert r.fell_back and models_sent(h) == ["test-model", "test-model", "backup-model"]
+
+
+def test_fallback_on_timeouts():
+    h = with_fallback([httpx.ReadTimeout("x"), httpx.ReadTimeout("x"), text(GOOD)])
+    assert h.client.generate("s", "u", Out).fell_back is True
+
+
+def test_fallback_on_per_day_quota_is_recorded():
+    h = with_fallback([per_day(), text(GOOD)])
+    r = h.client.generate("s", "u", Out)
+    assert r.fell_back and r.fallback_reason == "per_day quota" and r.model == "backup-model"
+    assert models_sent(h) == ["test-model", "backup-model"] and h.sleeps == []
+
+
+def test_no_fallback_for_per_minute_or_unknown_quota():
+    for err in (per_minute(), unknown_429()):
+        h = with_fallback([err] * 3 + [text(GOOD)])
+        with pytest.raises(QuotaExhausted):
+            h.client.generate("s", "u", Out)
+        assert models_sent(h) == ["test-model"] * 3
+
+
+def test_no_fallback_on_schema_failure_or_other_errors():
+    h = with_fallback([text(BAD), text(BAD), text(GOOD)])
+    with pytest.raises(SchemaValidationFailed):
+        h.client.generate("s", "u", Out)
+    assert models_sent(h) == ["test-model"] * 2  # the repair stayed on the primary
+    h = with_fallback([api_error(errors.ClientError, 400, "INVALID_ARGUMENT"), text(GOOD)])
+    with pytest.raises(LLMError):
+        h.client.generate("s", "u", Out)
+    assert models_sent(h) == ["test-model"]
+
+
+def test_primary_success_never_touches_the_fallback():
+    h = with_fallback([text(GOOD)])
+    r = h.client.generate("s", "u", Out)
+    assert (r.model, r.fell_back, r.fallback_reason) == ("test-model", False, None)
+    assert r.usage.model == "test-model"
+
+
+def test_fallback_gets_normal_retry_rules_and_is_the_last_stop():
+    # primary: 3 x 503; fallback: 503 then success (retried on the fallback)
+    h = with_fallback([unavailable()] * 3 + [unavailable(), text(GOOD)])
+    r = h.client.generate("s", "u", Out)
+    assert models_sent(h) == ["test-model"] * 3 + ["backup-model"] * 2 and r.attempts == 5
+    # fallback also down: its error is raised, no third model
+    h = with_fallback([unavailable()] * 6)
+    with pytest.raises(LLMUnavailable):
+        h.client.generate("s", "u", Out)
+    assert models_sent(h) == ["test-model"] * 3 + ["backup-model"] * 3
+
+
+def test_fallback_repair_stays_on_the_fallback():
+    h = with_fallback([unavailable()] * 3 + [text(BAD), text(GOOD)])
+    r = h.client.generate("s", "u", Out)
+    assert r.repair_used and r.fell_back
+    assert models_sent(h) == ["test-model"] * 3 + ["backup-model"] * 2
+
+
+def test_tool_loop_restarts_from_scratch_on_the_fallback():
+    script = [
+        tool_call("add", {"a": 1, "b": 2}),  # primary round 1
+        unavailable(), unavailable(), unavailable(),  # primary dies in round 2
+        tool_call("add", {"a": 5, "b": 5}),  # fallback starts over
+        text(GOOD),
+    ]  # fmt: skip
+    h = with_fallback(script)
+    r = with_tools(h)
+    assert r.fell_back and r.model == "backup-model"
+    assert models_sent(h) == ["test-model"] * 4 + ["backup-model"] * 2
+    assert [t.args for t in r.tool_calls] == [{"a": 5, "b": 5}]  # only the answering run's calls
+    assert len(h.sent[4]["contents"]) == 1  # a fresh conversation, not the primary's history
+    assert r.usage.requests == 6
+
+
+def test_fallback_disabled_when_same_model_or_none():
+    assert (
+        GeminiClient(genai_client=FakeGenai([]), model="m", fallback_model="m").fallback_model
+        is None
+    )
+    assert (
+        GeminiClient(genai_client=FakeGenai([]), model="m", fallback_model=None).fallback_model
+        is None
+    )
+    assert GeminiClient(genai_client=FakeGenai([]), single_shot=True).fallback_model is None
+
+
+def test_fallback_model_comes_from_env_with_a_default(monkeypatch):
+    monkeypatch.setenv("GEMINI_FALLBACK_MODEL", "")
+    assert (
+        GeminiClient(genai_client=FakeGenai([]), model="x").fallback_model
+        == "gemini-3.5-flash-lite"
+    )
+    monkeypatch.setenv("GEMINI_FALLBACK_MODEL", "other-fallback")
+    assert GeminiClient(genai_client=FakeGenai([]), model="x").fallback_model == "other-fallback"

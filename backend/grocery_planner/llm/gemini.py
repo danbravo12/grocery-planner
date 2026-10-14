@@ -10,7 +10,7 @@ import random
 import re
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 import httpx
@@ -34,6 +34,8 @@ from grocery_planner.llm.types import (
 )
 
 DEFAULT_MODEL = "gemini-3.1-flash-lite"
+DEFAULT_FALLBACK_MODEL = "gemini-3.5-flash-lite"
+_FROM_ENV: Any = object()  # sentinel: read GEMINI_FALLBACK_MODEL
 MAX_ATTEMPTS = 3  # attempts per request, including the first (5xx, per-minute and unknown 429)
 TIMEOUT_ATTEMPTS = 2  # timeouts and 504 DEADLINE_EXCEEDED: fail faster, one retry only
 BACKOFF_SECONDS = (1.0, 2.0)  # before retry n
@@ -67,6 +69,9 @@ def retry_delay_hint(err: errors.APIError) -> float | None:
 class _Call:
     """Accumulates usage and tool calls for one generate / generate_with_tools call."""
 
+    model: str
+    fell_back: bool = False
+    fallback_reason: str | None = None
     usage: Usage = field(default_factory=Usage)
     tool_calls: list[ToolCallRecord] = field(default_factory=list)
     repair_used: bool = False
@@ -84,8 +89,15 @@ class GeminiClient:
         rng: random.Random | None = None,
         clock: Callable[[], float] = time.perf_counter,
         single_shot: bool = False,
+        fallback_model: str | None = _FROM_ENV,
     ) -> None:
         self.model = model or getenv("GEMINI_MODEL") or DEFAULT_MODEL
+        if fallback_model is _FROM_ENV:
+            fallback_model = getenv("GEMINI_FALLBACK_MODEL") or DEFAULT_FALLBACK_MODEL
+        # None (or the same model) means no fallback. Never used by the single-shot probe.
+        self.fallback_model = (
+            None if single_shot or fallback_model == self.model else fallback_model
+        )
         self.thinking_level = thinking_level  # None = leave the model's default
         self._on_request = on_request
         self._sleep = sleep
@@ -104,11 +116,13 @@ class GeminiClient:
     def generate[T: BaseModel](
         self, system: str, user: str, output_type: type[T], temperature: float = 0.1
     ) -> LLMResult[T]:
-        start, call = self._clock(), _Call()
-        config = self._config(system, temperature, output_type, tools=None)
-        contents = [_user(user)]
-        response = self._request(call, contents, config)
-        return self._finish(call, start, contents, response, output_type, config)
+        def attempt(call: _Call, start: float) -> LLMResult[T]:
+            config = self._config(system, temperature, output_type, tools=None)
+            contents = [_user(user)]
+            response = self._request(call, contents, config)
+            return self._finish(call, start, contents, response, output_type, config)
+
+        return self._with_fallback(attempt)
 
     def generate_with_tools[T: BaseModel](
         self,
@@ -119,30 +133,54 @@ class GeminiClient:
         max_tool_rounds: int,
         temperature: float = 0.1,
     ) -> LLMResult[T]:
-        start, call = self._clock(), _Call()
-        by_name = {t.name: t for t in tools}
-        plain = self._config(system, temperature, output_type, tools=None)
-        config = self._config(system, temperature, output_type, tools=tools)
-        contents = [_user(user)]
-        rounds = 0
-        while True:
-            response = self._request(call, contents, config)
-            function_calls = response.function_calls or []
-            if not function_calls:
-                return self._finish(call, start, contents, response, output_type, plain)
-            rounds += 1
-            if rounds > max_tool_rounds:
-                raise ToolLoopExceeded(
-                    f"model still asking for tools after {max_tool_rounds} rounds"
-                )
-            # Echo the model's turn unchanged (Gemini 3 needs its thought signatures back).
-            contents.append(response.candidates[0].content)
-            parts = []
-            for fc in function_calls:
-                result, record = execute_tool(by_name, fc.name, dict(fc.args or {}), self._clock)
-                call.tool_calls.append(record)
-                parts.append(types.Part.from_function_response(name=fc.name, response=result))
-            contents.append(types.Content(role="user", parts=parts))
+        def attempt(call: _Call, start: float) -> LLMResult[T]:
+            by_name = {t.name: t for t in tools}
+            plain = self._config(system, temperature, output_type, tools=None)
+            config = self._config(system, temperature, output_type, tools=tools)
+            contents = [_user(user)]
+            rounds = 0
+            while True:
+                response = self._request(call, contents, config)
+                function_calls = response.function_calls or []
+                if not function_calls:
+                    return self._finish(call, start, contents, response, output_type, plain)
+                rounds += 1
+                if rounds > max_tool_rounds:
+                    raise ToolLoopExceeded(
+                        f"model still asking for tools after {max_tool_rounds} rounds"
+                    )
+                # Echo the model's turn unchanged (Gemini 3 needs its thought signatures back).
+                contents.append(response.candidates[0].content)
+                parts = []
+                for fc in function_calls:
+                    result, record = execute_tool(
+                        by_name, fc.name, dict(fc.args or {}), self._clock
+                    )
+                    call.tool_calls.append(record)
+                    parts.append(types.Part.from_function_response(name=fc.name, response=result))
+                contents.append(types.Content(role="user", parts=parts))
+
+        return self._with_fallback(attempt)
+
+    def _with_fallback[T: BaseModel](
+        self, attempt: Callable[[_Call, float], LLMResult[T]]
+    ) -> LLMResult[T]:
+        """Run on the primary model. If it is unavailable (retries exhausted) or out of daily
+        quota, run the whole call once more on the fallback model, from the start: a tool
+        conversation cannot move between models (thought signatures are model-specific).
+        Quotas are per model, so a per-day 429 on the primary says nothing about the fallback."""
+        start, call = self._clock(), _Call(model=self.model)
+        try:
+            return attempt(call, start)
+        except (LLMUnavailable, QuotaExhausted) as e:
+            if self.fallback_model is None or (
+                isinstance(e, QuotaExhausted) and e.kind != "per_day"
+            ):
+                raise
+            reason = "unavailable" if isinstance(e, LLMUnavailable) else "per_day quota"
+            call.model, call.fell_back, call.fallback_reason = self.fallback_model, True, reason
+            call.tool_calls, call.repair_used = [], False  # the answering run starts clean
+            return attempt(call, start)
 
     # ---- internals ----------------------------------------------------------------------
 
@@ -184,6 +222,7 @@ class GeminiClient:
         )
 
     def _emit(self, call: _Call, delta: Usage) -> None:
+        delta = replace(delta, model=call.model)
         call.usage += delta
         if self._on_request:
             self._on_request(delta)
@@ -195,7 +234,7 @@ class GeminiClient:
             attempt += 1
             try:
                 response = self._genai.models.generate_content(
-                    model=self.model, contents=contents, config=config
+                    model=call.model, contents=contents, config=config
                 )
             except errors.ClientError as e:
                 self._emit(call, Usage(requests=1))
@@ -271,12 +310,14 @@ class GeminiClient:
                 raise SchemaValidationFailed([text, second], problems + problems2)
         return LLMResult(
             parsed=parsed,
-            model=self.model,
+            model=call.model,
             attempts=call.usage.requests,
             repair_used=call.repair_used,
             tool_calls=call.tool_calls,
             usage=call.usage,
             latency_ms=round((self._clock() - start) * 1000),
+            fell_back=call.fell_back,
+            fallback_reason=call.fallback_reason,
         )
 
 
