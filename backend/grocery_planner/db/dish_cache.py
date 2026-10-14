@@ -6,24 +6,36 @@ from grocery_planner.domain.ingredients import DishResult
 
 
 class DishCacheRepo(Protocol):
-    def get(self, dish_key: str, avoid_key: str) -> DishResult | None: ...
+    def get(self, dish_key: str, avoid_key: str, prompt_version: str) -> DishResult | None: ...
 
     def put(
-        self, dish_key: str, avoid_key: str, dish_name: str, result: DishResult, model: str
+        self,
+        dish_key: str,
+        avoid_key: str,
+        prompt_version: str,
+        dish_name: str,
+        result: DishResult,
+        model: str,
     ) -> None: ...
 
 
 class InMemoryDishCache:
     def __init__(self) -> None:
-        self.rows: dict[tuple[str, str], DishResult] = {}
+        self.rows: dict[tuple[str, str, str], DishResult] = {}
 
-    def get(self, dish_key: str, avoid_key: str) -> DishResult | None:
-        return self.rows.get((dish_key, avoid_key))
+    def get(self, dish_key: str, avoid_key: str, prompt_version: str) -> DishResult | None:
+        return self.rows.get((dish_key, avoid_key, prompt_version))
 
     def put(
-        self, dish_key: str, avoid_key: str, dish_name: str, result: DishResult, model: str
+        self,
+        dish_key: str,
+        avoid_key: str,
+        prompt_version: str,
+        dish_name: str,
+        result: DishResult,
+        model: str,
     ) -> None:
-        self.rows[(dish_key, avoid_key)] = result
+        self.rows[(dish_key, avoid_key, prompt_version)] = result
 
 
 class PostgresDishCache:
@@ -42,22 +54,38 @@ class PostgresDishCache:
     def close(self) -> None:
         self._pool.close()
 
-    def get(self, dish_key: str, avoid_key: str) -> DishResult | None:
+    def get(self, dish_key: str, avoid_key: str, prompt_version: str) -> DishResult | None:
         with self._pool.connection() as conn:
             row = conn.execute(
-                "SELECT ingredients FROM dish_cache WHERE dish_key = %s AND avoid_key = %s",
-                (dish_key, avoid_key),
+                "SELECT ingredients FROM dish_cache "
+                "WHERE dish_key = %s AND avoid_key = %s AND prompt_version = %s",
+                (dish_key, avoid_key, prompt_version),
             ).fetchone()
         return DishResult.model_validate(row["ingredients"]) if row else None
 
     def put(
-        self, dish_key: str, avoid_key: str, dish_name: str, result: DishResult, model: str
+        self,
+        dish_key: str,
+        avoid_key: str,
+        prompt_version: str,
+        dish_name: str,
+        result: DishResult,
+        model: str,
     ) -> None:
         with self._pool.connection() as conn:
             conn.execute(
-                "INSERT INTO dish_cache (dish_key, avoid_key, dish_name, ingredients, model) "
-                "VALUES (%s, %s, %s, %s, %s) "
-                "ON CONFLICT (dish_key, avoid_key) DO UPDATE SET dish_name = EXCLUDED.dish_name, "
-                "ingredients = EXCLUDED.ingredients, model = EXCLUDED.model, created_at = now()",
-                (dish_key, avoid_key, dish_name, Jsonb(result.model_dump(mode="json")), model),
+                "INSERT INTO dish_cache "
+                "(dish_key, avoid_key, prompt_version, dish_name, ingredients, model) "
+                "VALUES (%s, %s, %s, %s, %s, %s) "
+                "ON CONFLICT (dish_key, avoid_key, prompt_version) DO UPDATE SET "
+                "dish_name = EXCLUDED.dish_name, ingredients = EXCLUDED.ingredients, "
+                "model = EXCLUDED.model, created_at = now()",
+                (
+                    dish_key,
+                    avoid_key,
+                    prompt_version,
+                    dish_name,
+                    Jsonb(result.model_dump(mode="json")),
+                    model,
+                ),
             )

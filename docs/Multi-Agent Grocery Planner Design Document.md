@@ -65,7 +65,7 @@ This agent turns the meal form into one consolidated, quantity-scaled list of pu
 4. Name each ingredient from a catalogue-derived vocabulary of generic items, each with a canonical unit (an out-of-vocabulary name is allowed and flagged)
 5. Respect each meal's avoid field by substituting, and say so in the assumptions
 
-**Output per item:** name, quantity, unit, category (meat, produce and so on), which meals use it, a pantry-staple flag, an in-vocabulary flag, and sanity flags for unusual amounts. The output also carries a top-level `assumptions[]`.
+**Output per item:** name, quantity, unit, category (meat, produce and so on), which meals use it, a pantry-staple flag, an in-vocabulary flag, sanity flags for unusual amounts, and an optional brand that is filled only when the dish text explicitly names one. The output also carries a top-level `assumptions[]`.
 
 **Rules**
 
@@ -83,10 +83,12 @@ This agent finds a comparable product for each purchasable item at each store an
 
 **Tool:** one price lookup that returns candidate products for a search term. At first it reads a seeded catalogue of about 100 ingredients. It returns the same fields a live source would, including a price timestamp, so swapping sources later is a config change. Seeded specials and price ages are stored relative to an anchor date (default: today), so specials never go stale.
 
+**Flow:** code pre-fetches up to five candidates per item per store (only the named brand when the user named one) and computes packs, total cost, unit price, pack-size tolerance and whether a special is active. One batched model call then picks a candidate per item per store, or none, with a tier and confidence. Code enforces the tier rules afterwards, downgrading and flagging any pick that breaks them. If a store had no usable pick and the model suggested search terms, there is one retry round (a single extra model call). The planner's loop-back reuses the same machinery.
+
 **Judgment calls**
 
 - Choose the best match from the candidates
-- Work out how many packs to buy (400g needed, 500g pack, so one pack)
+- Accept a pack count worked out by code (400g needed, 500g pack, so one pack)
 - Retry with a different search term when nothing matches
 - Suggest a substitute or mark the item not found
 - Flag low-confidence matches
@@ -171,10 +173,10 @@ The database is Supabase Postgres, with plain SQL so the schema stays portable. 
 | `runs` | Form input, parameters used, each agent's output, status, tokens, cost, latency, Langfuse trace ID | Run page, trace panel, evals |
 | `run_steps` | Per-step records: inputs, outputs, tool calls, tokens, latency | Public trace panel and SSE replay |
 | `price_catalogue` | Store, product, brand, pack size, price, special and end date, timestamp, `data_source` | Seeded prices behind the lookup tool |
-| `dish_cache` | Dish and normalised avoid text to per-serving ingredients | Avoids repeat LLM calls for the same dish |
+| `dish_cache` | Dish, normalised avoid text and prompt version to per-serving ingredients | Avoids repeat LLM calls for the same dish |
 | `usage_counters` | Per-visitor and global daily token counts, day-stop flag | Guardrails |
 
-**Caching:** only the dish expansion is cached, keyed on the dish plus its normalised avoid text, and a row is written only after the ingredient agent's output passes schema validation. The planner's output is never cached, because it depends on prices and parameters. Scaling by people and days is deterministic code.
+**Caching:** only the dish expansion is cached, keyed on the dish, its normalised avoid text and the ingredient prompt version (a prompt change makes old rows miss), and a row is written only after the ingredient agent's output passes schema validation. The planner's output is never cached, because it depends on prices and parameters. Scaling by people and days is deterministic code.
 
 **Access:** the browser never talks to Supabase directly. Only the backend does, using the service key. Row Level Security is enabled on every table anyway, so a leaked public key exposes nothing.
 

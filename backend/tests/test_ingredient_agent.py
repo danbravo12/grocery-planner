@@ -4,7 +4,12 @@ from decimal import Decimal as D
 import pytest
 from pydantic import ValidationError
 
-from grocery_planner.agents.ingredient import SYSTEM_PROMPT, batch_model, run_ingredient_agent
+from grocery_planner.agents.ingredient import (
+    INGREDIENT_PROMPT_VERSION,
+    SYSTEM_PROMPT,
+    batch_model,
+    run_ingredient_agent,
+)
 from grocery_planner.db.dish_cache import InMemoryDishCache
 from grocery_planner.domain.dish_cache import make_dish_cache_key
 from grocery_planner.domain.ingredients import DishIngredient, DishResult, ExpansionBatch, ModelDish
@@ -16,9 +21,14 @@ from tests.test_llm import FakeGenai, run, text
 VOCAB = ingredient_vocabulary()
 
 
-def ing(name, qty, unit="g", in_vocab=True, notes=""):
+def ing(name, qty, unit="g", in_vocab=True, notes="", brand=""):
     return DishIngredient(
-        name=name, quantity_per_serving=D(str(qty)), unit=unit, in_vocabulary=in_vocab, notes=notes
+        name=name,
+        quantity_per_serving=D(str(qty)),
+        unit=unit,
+        in_vocabulary=in_vocab,
+        notes=notes,
+        brand=brand,
     )
 
 
@@ -76,7 +86,7 @@ def test_all_cached_means_zero_llm_calls():
 
 def test_mixed_hits_and_misses_only_send_the_misses():
     cache = InMemoryDishCache()
-    cache.put(*make_dish_cache_key("fries", None), "fries",
+    cache.put(*make_dish_cache_key("fries", None), INGREDIENT_PROMPT_VERSION, "fries",
               DishResult(ingredients=[ing("fries", 150)]), "m")  # fmt: skip
     fake = FakeLLMClient([batch(dish("d1", ing("beef eye fillet", 200)))])
     r = run_ingredient_agent(req(meal(mains=["fillet mignon"], sides=["fries"])), fake, cache)
@@ -100,7 +110,10 @@ def test_same_dish_with_different_avoids_gets_two_keys_both_sent():
     assert [(d["dish_name"], d["avoid"]) for d in sent] == [
         ("potato salad", None), ("Potato  salad", "Dairy"),
     ]  # fmt: skip
-    assert set(cache.rows) == {("potato salad", ""), ("potato salad", "dairy")}
+    assert set(cache.rows) == {
+        ("potato salad", "", INGREDIENT_PROMPT_VERSION),
+        ("potato salad", "dairy", INGREDIENT_PROMPT_VERSION),
+    }
     assert r.cache.misses == 2
 
 
@@ -116,7 +129,7 @@ def test_identical_dish_and_avoid_in_two_meals_is_expanded_once():
 
 def test_stale_cache_row_counts_as_a_miss():
     cache = InMemoryDishCache()
-    cache.put(*make_dish_cache_key("x", None), "x",
+    cache.put(*make_dish_cache_key("x", None), INGREDIENT_PROMPT_VERSION, "x",
               DishResult(ingredients=[ing("unobtainium", 5, in_vocab=True)]), "m")  # fmt: skip
     fake = FakeLLMClient([batch(dish("d1", ing("rice", 50)))])
     r = run_ingredient_agent(req(meal(mains=["x"])), fake, cache)
@@ -329,3 +342,79 @@ def test_temperature_is_low_by_default_in_agent_call():
 
 def test_gemini_client_type_is_usable_here():
     assert GeminiClient  # keeps the import honest; the live test exercises it for real
+
+
+# ---- prompt version, cache bypass, brands ------------------------------------------------------
+
+
+def test_prompt_version_is_part_of_the_cache_key():
+    cache = InMemoryDishCache()
+    run_ingredient_agent(
+        req(meal(mains=["pilaf"])), FakeLLMClient([batch(dish("d1", ing("rice", 80)))]), cache
+    )
+    ((dish_key, avoid_key, version),) = cache.rows
+    assert (dish_key, avoid_key, version) == ("pilaf", "", INGREDIENT_PROMPT_VERSION)
+    # a row written under another prompt version is ignored
+    old = InMemoryDishCache()
+    old.put("pilaf", "", "0", "pilaf", DishResult(ingredients=[ing("rice", 1)]), "m")
+    fake = FakeLLMClient([batch(dish("d1", ing("rice", 80)))])
+    r = run_ingredient_agent(req(meal(mains=["pilaf"])), fake, old)
+    assert r.cache.misses == 1 and len(fake.calls) == 1
+
+
+def test_bypass_cache_reads_and_writes_nothing():
+    cache = InMemoryDishCache()
+    run_ingredient_agent(
+        req(meal(mains=["pilaf"])), FakeLLMClient([batch(dish("d1", ing("rice", 80)))]), cache
+    )
+    before = dict(cache.rows)
+    fake = FakeLLMClient([batch(dish("d1", ing("rice", 90)))])
+    r = run_ingredient_agent(req(meal(mains=["pilaf"])), fake, cache, bypass_cache=True)
+    assert len(fake.calls) == 1 and by_name(r)["rice"].quantity == D(90)  # did not read
+    assert (r.cache.hits, r.cache.misses) == (0, 1)
+    assert cache.rows == before  # did not write
+
+
+def test_brand_is_carried_only_from_dish_text_and_splits_merge_keys():
+    fake = FakeLLMClient(
+        [
+            batch(
+                dish("d1", ing("baked beans", 100, brand="Heinz")),
+                dish("d2", ing("baked beans", 50)),
+            )
+        ]
+    )
+    r = run_ingredient_agent(
+        req(meal(mains=["Heinz baked beans on toast"], sides=["beans"], people=2)),
+        fake,
+        InMemoryDishCache(),
+    )
+    beans = {i.brand: i for i in r.items if i.name == "baked beans"}
+    assert set(beans) == {"Heinz", None}  # same name and unit, different brand: two lines
+    assert beans["Heinz"].quantity == D(200) and beans[None].quantity == D(100)
+    assert [i.item_id for i in r.items] == ["i1", "i2"]
+
+
+def test_same_brand_merges_across_dishes_case_insensitively():
+    fake = FakeLLMClient(
+        [batch(dish("d1", ing("baked beans", 100, brand="Heinz")),
+               dish("d2", ing("baked beans", 50, brand="heinz")))]
+    )  # fmt: skip
+    r = run_ingredient_agent(
+        req(meal(mains=["Heinz beans"], sides=["heinz beans on toast"])), fake, InMemoryDishCache()
+    )
+    assert len(r.items) == 1 and r.items[0].quantity == D(150) and r.items[0].brand == "Heinz"
+
+
+def test_invented_brand_fails_validation_and_is_repaired():
+    Checked = batch_model(VOCAB, ["d1"], {"d1": "baked beans"})
+    bad = batch(dish("d1", ing("baked beans", 100, brand="Heinz")))
+    with pytest.raises(ValidationError, match="not named in the dish text"):
+        Checked.model_validate(bad.model_dump())
+    Checked.model_validate(batch(dish("d1", ing("baked beans", 100))).model_dump())
+    named = batch_model(VOCAB, ["d1"], {"d1": "Heinz baked beans"})
+    named.model_validate(bad.model_dump())
+
+
+def test_brand_field_is_in_the_system_prompt():
+    assert "ONLY when the dish text explicitly names a brand" in SYSTEM_PROMPT

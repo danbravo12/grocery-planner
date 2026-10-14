@@ -18,6 +18,7 @@ class DishIngredient(BaseModel):
     unit: Literal["g", "ml", "each"]
     in_vocabulary: bool
     notes: str = ""
+    brand: str = ""  # only when the dish text names a brand; "" means no brand
 
 
 class DishResult(BaseModel):
@@ -38,11 +39,13 @@ class ExpansionBatch(BaseModel):
 
 
 class IngredientItem(BaseModel):
+    item_id: str = ""  # i1, i2, ... assigned by the agent after sorting; stable within a run
     name: str
     quantity: Decimal
     unit: PackUnit
     category: str
     meals: list[str]
+    brand: str | None = None  # named by the user in the dish text, otherwise None
     pantry_staple: bool
     in_vocabulary: bool
     flags: list[str] = Field(default_factory=list)

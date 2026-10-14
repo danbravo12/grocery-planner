@@ -137,6 +137,21 @@ def pack_size_within_tolerance(
     return abs(Decimal(pack_size) - needed) <= tolerance * needed
 
 
+def pack_comparable(
+    needed_qty: Decimal | int, product: CatalogueProduct, tolerance: Decimal = DEFAULT_TOLERANCE
+) -> bool:
+    """Is this product's pack size close enough to the need to compare on unit price?
+    True when one pack is within `tolerance` of the needed size, or, when the need spans several
+    packs, when the whole packs bought overshoot the need by no more than `tolerance`."""
+    needed = Decimal(needed_qty)
+    if pack_size_within_tolerance(needed, product.pack_size, tolerance):
+        return True
+    if needed > product.pack_size:
+        _, _, leftover = packs_needed(needed, product.pack_unit, product)
+        return leftover <= tolerance * needed
+    return False
+
+
 class HasSpecial(Protocol):
     on_special: bool
     special_end_date: date | None

@@ -83,7 +83,7 @@ def test_dish_cache_round_trip():
     from grocery_planner.db.dish_cache import PostgresDishCache
     from grocery_planner.domain.ingredients import DishIngredient, DishResult
 
-    key = ("integration test dish", "dairy,nuts")
+    key = ("integration test dish", "dairy,nuts", "test-v1")
     result = DishResult(
         ingredients=[
             DishIngredient(
@@ -97,7 +97,8 @@ def test_dish_cache_round_trip():
         assert cache.get(*key) is None
         cache.put(*key, "Integration Test Dish", result, "model-a")
         assert cache.get(*key) == result
-        assert cache.get(key[0], "") is None  # a different avoid is a different row
+        assert cache.get(key[0], "", key[2]) is None  # a different avoid is a different row
+        assert cache.get(key[0], key[1], "test-v2") is None  # a different prompt version misses
         cache.put(*key, "Integration Test Dish", result.model_copy(update={"assumptions": []}), "b")
         assert cache.get(*key).assumptions == []  # upsert overwrites
     finally:
