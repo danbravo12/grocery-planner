@@ -82,6 +82,8 @@ uv run python -m evals.run --list
 
 It writes `evals/results/<timestamp>-<model>.json` and a markdown summary, and exits 1 if an agent is more than 10 points below `evals/baseline.json`, below its floor (ingredient 85%, price 85%, planner 90%), or if any answer came from a fallback model. A full run takes about 5 minutes at the 12 requests a minute limit, so it is not part of the normal test run.
 
+Request counting: a case's call limit counts model calls (first calls and tool rounds); repairs and transport retries (5xx, timeouts, per-minute 429s) are reported but never fail a case, and a per-day 429 stops the run with exit code 3 instead of producing failures. The three end-to-end cases all expect "no meaningful difference" because the seeded prices are close; the planner cases cover the other outcomes (one store, split, and the two overrides).
+
 **Scores (DRAFT: the expected values are awaiting review, so the baseline is not final).** Pass rate = cases passed over case runs.
 
 | Agent | Cases | `gemini-3.1-flash-lite` (default), 1 run | `gemini-3.5-flash-lite`, 3 runs (mean / min) |

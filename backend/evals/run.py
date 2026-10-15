@@ -3,9 +3,11 @@
     uv run python -m evals.run [--agent X] [--case ID] [--model M] [--repeat N]
 
 Needs GEMINI_EVAL_API_KEY (never the demo's key). Writes evals/results/<timestamp>-<model>.json
-and .md, prints the markdown, and exits 1 when an agent drops more than 10 points below
-evals/baseline.json or under its floor (ingredient 85%, price 85%, planner 90%), or when any
-answer came from a fallback model. Exit code 2: the environment is not set up.
+and .md and prints the markdown. Exit codes: 0 passed; 1 an agent dropped more than 10 points
+below evals/baseline.json or under its floor (ingredient 85%, price 85%, planner 90%), too many
+runs were lost to infrastructure errors, or an answer came from a fallback model; 2 the
+environment is not set up; 3 the eval key's daily quota ran out (the run stops there and
+nothing is graded).
 """
 
 import argparse
@@ -20,6 +22,7 @@ from evals.execute import ANCHOR, LLMFactory, execute
 from evals.harness import (
     ANCHOR_ISO,
     EvalConfigError,
+    EvalQuotaExhausted,
     Meter,
     make_client,
     prepare_environment,
@@ -39,33 +42,43 @@ RESULTS_DIR = Path(__file__).parent / "results"
 
 
 def run_case(case: Case, make_llm: LLMFactory, repeat: int) -> CaseResult:
+    """Raises EvalQuotaExhausted when the daily quota is gone; the run stops there."""
     meter = Meter()
     execution = execute(case, make_llm, meter)
-    outcomes = evaluate(case, execution, meter)
     subject = execution.subject
+    kinds: dict[str, int] = {}
     if case.agent == "price" and subject is not None:
-        downgrades = len(subject.result.downgrades)
+        found = [d.kind for d in subject.result.downgrades]
     elif case.agent == "e2e" and subject is not None:
-        downgrades = len((subject.run.price_output or {}).get("downgrades", []))
+        found = [d.get("kind", "") for d in (subject.run.price_output or {}).get("downgrades", [])]
     else:
-        downgrades = 0
+        found = []
+    for kind in found:
+        kinds[kind or "unknown"] = kinds.get(kind or "unknown", 0) + 1
+    infra = execution.error_kind == "infra"
+    outcomes = [] if infra else evaluate(case, execution, meter)
     return CaseResult(
         id=case.id,
         agent=case.agent,
         repeat=repeat,
-        passed=all(o.passed for o in outcomes),
+        passed=not infra and all(o.passed for o in outcomes),
+        scored=not infra,
         error=execution.error,
         error_kind=execution.error_kind,
         latency_s=round(execution.latency_s, 2),
         outcomes=[{"name": o.name, "passed": o.passed, "detail": o.detail} for o in outcomes],
         metrics={
-            "requests": meter.requests,
+            "calls": meter.calls,
+            "repairs": meter.repairs,
+            "model_calls": meter.model_calls,
+            "transport_retries": meter.transport_retries,
+            "sends": meter.sends,
             "input_tokens": meter.input_tokens,
             "output_tokens": meter.output_tokens,
             "thinking_tokens": meter.thinking_tokens,
             "would_cost_usd": str(meter.would_cost_usd),
-            "downgrades": downgrades,
-            "repairs": meter.repairs,
+            "downgrades": len(found),
+            "downgrade_kinds": kinds,
             "fell_back": meter.fell_back,
             "models": meter.models,
         },
@@ -81,21 +94,35 @@ def validate_cases(cases: list[Case]) -> None:
 
 def run_all(
     cases: list[Case], make_llm: LLMFactory, repeat: int, progress=None
-) -> list[CaseResult]:
+) -> tuple[list[CaseResult], str | None]:
+    """Run every case `repeat` times. Returns the results and, if the daily quota ran out, the
+    quota message (the results are then what finished before it; the case in flight is dropped)."""
     progress = progress or (lambda line: print(line, flush=True))
     results: list[CaseResult] = []
     total = len(cases) * repeat
     for k in range(1, repeat + 1):
         for case in cases:
-            r = run_case(case, make_llm, k)
+            try:
+                r = run_case(case, make_llm, k)
+            except EvalQuotaExhausted as exc:
+                progress(f"QUOTA: {exc}. Stopping after {len(results)} of {total} case runs.")
+                return results, str(exc)
             results.append(r)
             failed = [o["name"] for o in r.outcomes if not o["passed"]]
-            progress(
-                f"[{len(results)}/{total}] {case.id} (repeat {k}): "
-                + ("PASS" if r.passed else "FAIL " + ", ".join(sorted(set(failed))))
-                + f"  {r.metrics['requests']} req, {r.latency_s:.1f}s"
+            verdict = (
+                "NOT SCORED (infrastructure: " + (r.error or "") + ")"
+                if not r.scored
+                else "PASS"
+                if r.passed
+                else "FAIL " + ", ".join(sorted(set(failed)))
             )
-    return results
+            m = r.metrics
+            progress(
+                f"[{len(results)}/{total}] {case.id} (repeat {k}): {verdict}  "
+                f"{m['model_calls']} calls ({m['repairs']} repairs), "
+                f"{m['transport_retries']} transport retries, {r.latency_s:.1f}s"
+            )
+    return results, None
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -137,7 +164,7 @@ def main(argv: list[str] | None = None) -> int:
         return make_client(model, meter, hooks)
 
     print(f"evals: {len(cases)} cases x {args.repeat} on {model} (as_of {ANCHOR_ISO})", flush=True)
-    results = run_all(cases, make_llm, args.repeat)
+    results, quota = run_all(cases, make_llm, args.repeat)
 
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     meta = {
@@ -147,11 +174,15 @@ def main(argv: list[str] | None = None) -> int:
         "cases": len(cases),
         "as_of": ANCHOR.isoformat(),
         "agents": sorted({c.agent for c in cases}),
+        "status": "quota" if quota else "complete",
+        "quota_message": quota,
+        "completed_runs": len(results),
+        "planned_runs": len(cases) * args.repeat,
     }
     rows = [r.to_dict() for r in results]
     summary = summarize(rows)
     baseline = load_baseline()
-    failures = gate(summary, baseline)
+    failures = [] if quota else gate(summary, baseline)  # a partial run is never graded
     markdown = render_markdown(meta, summary, failures, baseline, rows)
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
@@ -164,9 +195,11 @@ def main(argv: list[str] | None = None) -> int:
     md_path.write_text(markdown)
     print("\n" + markdown)
     print(f"wrote {json_path} and {md_path.name}")
-    if args.write_baseline:
+    if args.write_baseline and not quota:
         BASELINE_PATH.write_text(json.dumps(baseline_from(summary, meta), indent=1) + "\n")
         print(f"wrote {BASELINE_PATH} (draft)")
+    if quota:
+        return 3  # not a pass and not a fail: out of quota, nothing graded
     return 1 if failures else 0
 
 

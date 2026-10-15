@@ -14,6 +14,7 @@ BASELINE_PATH = Path(__file__).parent / "baseline.json"
 # no floor of their own: with 3 cases, one failure is a 33-point drop below a 100% baseline.
 FLOORS: dict[str, float] = {"ingredient": 0.85, "price": 0.85, "planner": 0.90}
 MAX_DROP = 0.10  # fail when an agent falls more than 10 points below the baseline
+MAX_UNSCORED = 0.25  # fail when more of an agent's runs than this hit infrastructure errors
 _EPS = 1e-9
 
 
@@ -28,6 +29,9 @@ class CaseResult:
     latency_s: float
     outcomes: list[dict[str, Any]]  # {name, passed, detail}
     metrics: dict[str, Any] = field(default_factory=dict)
+    # False when the case hit an infrastructure error (503 that outlasted the retries, a
+    # per-minute 429): it says nothing about the model, so it is not part of any pass rate.
+    scored: bool = True
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -41,13 +45,47 @@ def case_checks(result: dict[str, Any]) -> dict[str, bool]:
     return by_name
 
 
+def _usage(rs: list[dict[str, Any]]) -> dict[str, Any]:
+    def total(key: str) -> int:
+        return sum(r["metrics"].get(key, 0) for r in rs)
+
+    kinds: dict[str, int] = defaultdict(int)
+    for r in rs:
+        for kind, n in r["metrics"].get("downgrade_kinds", {}).items():
+            kinds[kind] += n
+    errors: dict[str, int] = defaultdict(int)
+    for r in rs:
+        if r["error_kind"]:
+            errors[r["error_kind"]] += 1
+    return {
+        "calls": total("calls"),
+        "repairs": total("repairs"),
+        "model_calls": total("model_calls"),
+        "transport_retries": total("transport_retries"),
+        "input_tokens": total("input_tokens"),
+        "output_tokens": total("output_tokens"),
+        "thinking_tokens": total("thinking_tokens"),
+        "would_cost_usd": float(
+            sum(Decimal(str(r["metrics"].get("would_cost_usd", 0))) for r in rs)
+        ),
+        "downgrades": total("downgrades"),
+        "downgrade_kinds": dict(kinds),
+        "fell_back": sum(bool(r["metrics"].get("fell_back")) for r in rs),
+        "errors": dict(errors),
+        "latency_avg_s": sum(r["latency_s"] for r in rs) / len(rs) if rs else 0.0,
+        "latency_max_s": max((r["latency_s"] for r in rs), default=0.0),
+    }
+
+
 def summarize(results: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
-    """Per agent: pass rates (overall, per repeat, per check) and usage totals."""
+    """Per agent: pass rates over the scored runs (overall, per repeat, per check) and usage
+    totals over all runs. Unscored runs (infrastructure errors) are counted, not scored."""
     summary: dict[str, dict[str, Any]] = {}
     for agent in AGENTS:
-        rs = [r for r in results if r["agent"] == agent]
-        if not rs:
+        all_rs = [r for r in results if r["agent"] == agent]
+        if not all_rs:
             continue
+        rs = [r for r in all_rs if r.get("scored", True)]
         repeats = sorted({r["repeat"] for r in rs})
         per_repeat = [
             sum(r["passed"] for r in rs if r["repeat"] == k)
@@ -59,40 +97,27 @@ def summarize(results: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
             for name, ok in case_checks(r).items():
                 checks[name][0] += int(ok)
                 checks[name][1] += 1
-        errors: dict[str, int] = defaultdict(int)
-        for r in rs:
-            if r["error_kind"]:
-                errors[r["error_kind"]] += 1
-
-        def total(key: str, rs=rs) -> int:
-            return sum(r["metrics"].get(key, 0) for r in rs)
-
+        passed = sum(r["passed"] for r in rs)
         summary[agent] = {
-            "cases": len({r["id"] for r in rs}),
-            "runs": len(rs),
-            "passed": sum(r["passed"] for r in rs),
-            "pass_rate": sum(r["passed"] for r in rs) / len(rs),
+            "cases": len({r["id"] for r in all_rs}),
+            "runs": len(all_rs),
+            "scored": len(rs),
+            "unscored": len(all_rs) - len(rs),
+            "passed": passed,
+            "pass_rate": passed / len(rs) if rs else None,
             "repeat_rates": per_repeat,
-            "rate_mean": sum(per_repeat) / len(per_repeat),
-            "rate_min": min(per_repeat),
+            "rate_mean": sum(per_repeat) / len(per_repeat) if per_repeat else None,
+            "rate_min": min(per_repeat) if per_repeat else None,
             "checks": {
                 n: {"passed": p, "total": t, "rate": p / t} for n, (p, t) in sorted(checks.items())
             },
-            "requests": total("requests"),
-            "input_tokens": total("input_tokens"),
-            "output_tokens": total("output_tokens"),
-            "thinking_tokens": total("thinking_tokens"),
-            "would_cost_usd": float(
-                sum(Decimal(str(r["metrics"].get("would_cost_usd", 0))) for r in rs)
-            ),
-            "downgrades": total("downgrades"),
-            "repairs": total("repairs"),
-            "fell_back": sum(bool(r["metrics"].get("fell_back")) for r in rs),
-            "errors": dict(errors),
-            "latency_avg_s": sum(r["latency_s"] for r in rs) / len(rs),
-            "latency_max_s": max(r["latency_s"] for r in rs),
+            **_usage(all_rs),
         }
     return summary
+
+
+def totals(summary: dict[str, dict[str, Any]], results: list[dict[str, Any]]) -> dict[str, Any]:
+    return {"runs": len(results), **_usage(results)}
 
 
 def load_baseline(path: Path = BASELINE_PATH) -> dict[str, Any] | None:
@@ -105,7 +130,9 @@ def baseline_from(summary: dict[str, dict[str, Any]], meta: dict[str, Any]) -> d
         "recorded": meta["timestamp"],
         "model": meta["model"],
         "repeat": meta["repeat"],
-        "pass_rates": {a: round(s["pass_rate"], 4) for a, s in summary.items()},
+        "pass_rates": {
+            a: round(s["pass_rate"], 4) for a, s in summary.items() if s["pass_rate"] is not None
+        },
     }
 
 
@@ -119,6 +146,13 @@ def gate(
     failures = []
     for agent, s in summary.items():
         rate = s["pass_rate"]
+        if s["unscored"] / s["runs"] > MAX_UNSCORED + _EPS:
+            failures.append(
+                f"{agent}: {s['unscored']} of {s['runs']} runs hit infrastructure errors and "
+                f"were not scored (more than {MAX_UNSCORED:.0%}), so the score cannot be trusted"
+            )
+        if rate is None:
+            continue
         if agent in floors and rate < floors[agent] - _EPS:
             failures.append(f"{agent}: pass rate {rate:.1%} is below the {floors[agent]:.0%} floor")
         base = (baseline or {}).get("pass_rates", {}).get(agent)
@@ -134,8 +168,12 @@ def gate(
     return failures
 
 
-def _pct(x: float) -> str:
-    return f"{x * 100:.1f}%"
+def _pct(x: float | None) -> str:
+    return "n/a" if x is None else f"{x * 100:.1f}%"
+
+
+def _kinds(d: dict[str, int]) -> str:
+    return ", ".join(f"{k}: {v}" for k, v in sorted(d.items())) or "0"
 
 
 def render_markdown(
@@ -153,27 +191,44 @@ def render_markdown(
         f"Run {meta['timestamp']} · {meta['cases']} cases × {repeat} repeat(s) · APP_ENV=eval · "
         f"as_of {meta['as_of']} · fallback model off · deterministic checks only (no LLM judge)",
         "",
+    ]
+    if meta.get("status") == "quota":
+        lines += [
+            f"> **QUOTA: the run stopped early.** {meta['quota_message']} "
+            f"{meta['completed_runs']} of {meta['planned_runs']} case runs finished and are "
+            "reported below; the rest were not run and nothing is scored against a baseline.",
+            "",
+        ]
+    lines += [
         "## Scores",
+        "",
+        "Pass rate = cases passed over scored case runs. A run that hit an infrastructure error "
+        "(a 5xx or timeout that outlasted its retries, a per-minute 429) is not scored.",
         "",
         "| Agent | Cases | Passed | Pass rate | "
         + ("Mean / min over repeats | " if repeat > 1 else "")
-        + "Baseline | Floor |",
-        "| --- | ---: | ---: | ---: | " + ("---: | " if repeat > 1 else "") + "---: | ---: |",
+        + "Not scored | Baseline | Floor |",
+        "| --- | ---: | ---: | ---: | "
+        + ("---: | " if repeat > 1 else "")
+        + "---: | ---: | ---: |",
     ]
     for agent, s in summary.items():
         floor = FLOORS.get(agent)
         lines.append(
-            f"| {agent} | {s['cases']} | {s['passed']}/{s['runs']} | {_pct(s['pass_rate'])} | "
+            f"| {agent} | {s['cases']} | {s['passed']}/{s['scored']} | {_pct(s['pass_rate'])} | "
             + (f"{_pct(s['rate_mean'])} / {_pct(s['rate_min'])} | " if repeat > 1 else "")
-            + f"{_pct(base[agent]) if agent in base else '-'} | "
+            + f"{s['unscored']} | {_pct(base[agent]) if agent in base else '-'} | "
             f"{_pct(floor) if floor else '-'} |"
         )
     if baseline and baseline.get("status") != "approved":
         lines += ["", f"_Baseline status: {baseline.get('status')}. Expected values are a draft._"]
     lines += ["", "## Gate", ""]
-    lines += [f"- FAIL: {f}" for f in failures] or [
-        "- PASS: every agent is within the baseline and above its floor."
-    ]
+    if meta.get("status") == "quota":
+        lines.append("- NOT GRADED: the run was cut short by the daily quota.")
+    else:
+        lines += [f"- FAIL: {f}" for f in failures] or [
+            "- PASS: every agent is within the baseline and above its floor."
+        ]
 
     lines += ["", "## Pass rate per check", ""]
     for agent, s in summary.items():
@@ -187,22 +242,25 @@ def render_markdown(
     lines += [
         "## Usage",
         "",
-        "Would-be cost is what the requests would cost on Google's paid tier (the eval key "
-        "itself is free tier).",
+        "Model calls = first calls + tool rounds + repairs. Transport retries (5xx, timeouts, "
+        "per-minute 429) are infrastructure: reported here, never a failure. Would-be cost is "
+        "what the calls would cost on Google's paid tier (the eval key itself is free tier).",
         "",
-        "| Agent | Requests | Input tok | Output tok | Thinking tok | Would-be cost | "
-        "Avg latency | Downgrades | Repairs | Fell back | Errors |",
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
+        "| Agent | Model calls | Repairs | Transport retries | Input tok | Output tok | "
+        "Thinking tok | Would-be cost | Avg latency | Downgrades (by kind) | Fell back | Errors |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | ---: | --- |",
     ]
-    for agent, s in summary.items():
-        errors = ", ".join(f"{k}: {v}" for k, v in s["errors"].items()) or "0"
+    rows = [(a, s) for a, s in summary.items()] + [("**all**", totals(summary, results))]
+    for agent, s in rows:
         lines.append(
-            f"| {agent} | {s['requests']} | {s['input_tokens']} | {s['output_tokens']} | "
-            f"{s['thinking_tokens']} | ${s['would_cost_usd']:.4f} | {s['latency_avg_s']:.1f}s | "
-            f"{s['downgrades']} | {s['repairs']} | {s['fell_back']} | {errors} |"
+            f"| {agent} | {s['model_calls']} | {s['repairs']} | {s['transport_retries']} | "
+            f"{s['input_tokens']} | {s['output_tokens']} | {s['thinking_tokens']} | "
+            f"${s['would_cost_usd']:.4f} | {s['latency_avg_s']:.1f}s | "
+            f"{s['downgrades']} ({_kinds(s['downgrade_kinds'])}) | {s['fell_back']} | "
+            f"{_kinds(s['errors'])} |"
         )
 
-    failed = [r for r in results if not r["passed"]]
+    failed = [r for r in results if r.get("scored", True) and not r["passed"]]
     lines += ["", "## Failing cases", ""]
     if not failed:
         lines.append("None.")
@@ -210,8 +268,8 @@ def render_markdown(
     for r in failed:
         by_case[r["id"]].append(r)
     for case_id, runs in by_case.items():
-        total = sum(1 for r in results if r["id"] == case_id)
-        lines.append(f"- **{case_id}** failed {len(runs)} of {total} run(s)")
+        total = sum(1 for r in results if r["id"] == case_id and r.get("scored", True))
+        lines.append(f"- **{case_id}** failed {len(runs)} of {total} scored run(s)")
         seen: set[str] = set()
         for r in runs:
             for o in r["outcomes"]:
@@ -219,4 +277,9 @@ def render_markdown(
                 if not o["passed"] and text not in seen:
                     seen.add(text)
                     lines.append(f"  - {text}")
+    unscored = [r for r in results if not r.get("scored", True)]
+    if unscored:
+        lines += ["", "## Not scored (infrastructure)", ""]
+        for r in unscored:
+            lines.append(f"- {r['id']} (repeat {r['repeat']}): {r['error']}")
     return "\n".join(lines) + "\n"

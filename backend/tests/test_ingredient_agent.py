@@ -428,3 +428,75 @@ def test_result_records_the_answering_model_and_blank_when_cached():
     assert (first.model, first.fell_back) == ("fake-model", False)
     cached = run_ingredient_agent(req(meal(mains=["pilaf"])), FakeLLMClient([]), cache)
     assert (cached.model, cached.fell_back) == ("", False)
+
+
+# ---- runtime avoid guard ---------------------------------------------------------------------
+
+
+def test_penne_in_gluten_free_bolognese_is_sent_back_for_the_one_repair():
+    bad = text(_json(("d1", [("beef mince", 100, "g", True), ("penne", 90, "g", True)])))
+    good = text(_json(("d1", [("beef mince", 100, "g", True), ("rice", 80, "g", True)])))
+    h = run([bad, good])
+    cache = InMemoryDishCache()
+    r = run_ingredient_agent(
+        req(meal(mains=["spaghetti bolognese"], avoid="gluten")), h.client, cache
+    )
+    assert r.usage.requests == 2 and "penne" not in by_name(r) and "rice" in by_name(r)
+    repair_prompt = h.sent[1]["contents"][-1].parts[0].text
+    assert "'penne' breaks the avoid text 'gluten'" in repair_prompt
+    assert len(cache.rows) == 1
+
+
+def test_a_second_violation_fails_validation_and_caches_nothing():
+    bad = text(_json(("d1", [("penne", 90, "g", True)])))
+    h = run([bad, bad])
+    cache = InMemoryDishCache()
+    with pytest.raises(SchemaValidationFailed):
+        run_ingredient_agent(req(meal(mains=["pasta"], avoid="gluten")), h.client, cache)
+    assert cache.rows == {}
+
+
+@pytest.mark.parametrize(
+    ("avoid", "forbidden", "fine"),
+    [
+        ("dairy", "milk", "coconut milk"),
+        ("Dairy-free please", "parmesan", "tofu"),
+        ("nuts", "peanut butter", "butter"),
+        ("peanuts and eggs", "mayonnaise", "chicken breast"),
+        ("shellfish", "prawns", "salmon"),
+        ("fish", "tuna", "prawns"),
+        ("pork", "bacon", "beef mince"),
+        ("beef", "beef stock", "chicken stock"),
+        ("meat", "chicken thigh", "rice"),
+        ("soy", "soy sauce", "honey"),
+    ],
+)
+def test_each_known_category_forbids_its_vocabulary_items(avoid, forbidden, fine):
+    Checked = batch_model(VOCAB, ["d1"], {"d1": "dish"}, {"d1": avoid})
+    with pytest.raises(ValidationError, match="breaks the avoid text"):
+        Checked.model_validate(
+            batch(dish("d1", ing(forbidden, 100, VOCAB[forbidden].unit))).model_dump()
+        )
+    if fine in VOCAB:  # unlisted names are out-of-vocabulary and not judged by the table
+        Checked.model_validate(batch(dish("d1", ing(fine, 100, VOCAB[fine].unit))).model_dump())
+
+
+def test_avoid_text_is_normalised_and_unknown_avoid_is_not_checked(caplog):
+    from grocery_planner.tools.avoid_rules import avoid_violations, categories_in
+
+    assert categories_in("  No DAIRY, nuts & Gluten!") == ["dairy", "gluten", "nuts"]
+    assert categories_in("tree nuts") == ["nuts"] and categories_in("peanut") == ["peanuts"]
+    with caplog.at_level("INFO"):
+        assert avoid_violations("mushrooms", ["milk", "eggs"], VOCAB) == []
+    assert "relying on the model" in caplog.text
+    assert avoid_violations(None, ["milk"], VOCAB) == []
+    assert avoid_violations("   ", ["milk"], VOCAB) == []
+
+
+def test_cached_dish_that_breaks_the_current_avoid_is_a_miss():
+    cache = InMemoryDishCache()
+    key = ("pasta", "gluten", INGREDIENT_PROMPT_VERSION)
+    cache.put(*key, "pasta", DishResult(ingredients=[ing("penne", 90)], assumptions=[]), "m")
+    fake = FakeLLMClient([batch(dish("d1", ing("rice", 80)))])
+    r = run_ingredient_agent(req(meal(mains=["pasta"], avoid="gluten")), fake, cache)
+    assert r.cache.hits == 0 and len(fake.calls) == 1 and "rice" in by_name(r)

@@ -453,3 +453,54 @@ def test_seed_edge_cases_with_a_scripted_model():
     assert flags["i5"] == (True, False, True)  # bacon: tier gap, special ends in 6 days
     assert flags["i7"] == (False, False, True)  # chicken: special ends in 3 days
     assert flags["i3"] == (False, False, False)
+
+
+# ---- same-food rule: a pick must be the item's own ingredient --------------------------------
+
+
+def test_hash_browns_for_potato_gems_is_capped_at_substitute():
+    items = [item("i1", "potato gems", 1000)]
+    first = batch(ItemOut(
+        item_id="i1", retry_terms=["hash browns"],
+        picks=[pick(COLES, "col-potato-gems-01"), pick(WOOL, None, "not_found", "low", "none")],
+    ))  # fmt: skip
+    second = batch(entry("i1", None, ("wol-hash-browns-01", "equivalent")))
+    result, _ = price(items, first, second)
+    r = row(result, "i1", WOOL)
+    assert (r.product_id, r.match_tier) == ("wol-hash-browns-01", "substitute")
+    d = next(d for d in result.downgrades if d.kind == "different_food")
+    assert (d.store, d.from_tier, d.to_tier) == (WOOL, "equivalent", "substitute")
+    assert "different food" in d.reason
+    assert row(result, "i1", COLES).match_tier == "equivalent"  # its own food stays usable
+    assert any(f.kind == "different_food" for f in result.flags)
+
+
+def test_coconut_milk_for_milk_is_capped_even_when_claimed_exact():
+    items = [item("i1", "milk", 2000, "ml")]
+    result, _ = price(
+        items,
+        batch(entry("i1", ("col-coconut-milk-01", "exact"), ("wol-coconut-milk-01", "exact"))),
+    )
+    assert [r.match_tier for r in result.items] == ["substitute", "substitute"]
+    assert [d.kind for d in result.downgrades] == ["different_food"] * 2
+    assert coverage(result.items, ACTIVE_STORES).common_items == []  # not usable in totals
+
+
+def test_an_alias_of_the_same_ingredient_is_the_same_food():
+    items = [item("i1", "fillet mignon", 400)]
+    result, _ = price(
+        items,
+        batch(
+            entry("i1", ("col-eye-fillet-01", "equivalent"), ("wol-eye-fillet-01", "equivalent"))
+        ),
+    )
+    assert [r.match_tier for r in result.items] == ["equivalent", "equivalent"]
+    assert result.downgrades == []
+
+
+def test_same_food_helper():
+    from grocery_planner.tools.vocabulary import same_food
+
+    assert same_food("milk", "col-milk-02") and not same_food("milk", "col-coconut-milk-01")
+    assert not same_food("potato gems", "wol-hash-browns-01")
+    assert same_food("anything", "not-in-the-catalogue")  # unknown ids are not judged

@@ -13,7 +13,7 @@
   input:
     build: {kind: fixture, name: a}
   checks:
-    max_requests: 2
+    max_calls: 1
     rule_verdict: no_meaningful_difference
     recommendation: no_meaningful_difference
     overridden: false
@@ -29,7 +29,7 @@
   input:
     build: {kind: fixture, name: c}
   checks:
-    max_requests: 2
+    max_calls: 1
     rule_verdict: no_meaningful_difference
     recommendation: no_meaningful_difference
     overridden: false
@@ -45,7 +45,7 @@
   input:
     build: {kind: scenario, name: large_gap}
   checks:
-    max_requests: 2
+    max_calls: 1
     rule_verdict: one_store
     recommendation: one_store
     store: woolworths
@@ -62,7 +62,7 @@
   input:
     build: {kind: scenario, name: split}
   checks:
-    max_requests: 4
+    max_calls: 3
     rule_verdict: split
     recommendation: split
     overridden: false
@@ -78,7 +78,7 @@
   input:
     build: {kind: scenario, name: special_tomorrow}
   checks:
-    max_requests: 2
+    max_calls: 1
     rule_verdict: one_store
     recommendation: no_meaningful_difference
     overridden: true
@@ -94,7 +94,7 @@
   input:
     build: {kind: scenario, name: doubtful_match}
   checks:
-    max_requests: 2
+    max_calls: 1
     rule_verdict: one_store
     recommendation: no_meaningful_difference
     overridden: true
@@ -110,7 +110,7 @@
   input:
     build: {kind: basket_d}
   checks:
-    max_requests: 2
+    max_calls: 1
     rule_verdict: no_meaningful_difference
     recommendation: no_meaningful_difference
     overridden: false
@@ -127,7 +127,7 @@
   input:
     build: {kind: basket_d, coles_factor: "1.25"}
   checks:
-    max_requests: 2
+    max_calls: 1
     rule_verdict: one_store
     recommendation: one_store
     store: woolworths
@@ -143,7 +143,7 @@
   input:
     build: {kind: basket_d, prices: {mince: {coles: "9.50"}}}
   checks:
-    max_requests: 2
+    max_calls: 1
     rule_verdict: no_meaningful_difference
     recommendation: no_meaningful_difference
     overridden: false
@@ -157,7 +157,7 @@
   input:
     build: {kind: basket_d, missing: {cheddar: [woolworths], carrot: [woolworths]}}
   checks:
-    max_requests: 2
+    max_calls: 1
     rule_verdict: no_meaningful_difference
     recommendation: no_meaningful_difference
     overridden: false

@@ -8,8 +8,8 @@
   agent: price
   notes: >
     Edge case d: eight everyday items priced almost identically at both stores. The agent must
-    pick standard-band products of the right type (milk is not coconut milk, carrots are not
-    the premium line) and the cheapest acceptable one at each store.
+    pick standard-band products of the right type (milk is not coconut milk, bread is white bread
+    and not wholemeal or rolls, carrots are not the premium line) and the cheapest acceptable one at each store.
   input:
     items:
       - {name: milk, quantity: 2000, unit: ml}
@@ -21,14 +21,14 @@
       - {name: cheddar, quantity: 500, unit: g}
       - {name: carrot, quantity: 1000, unit: g}
   checks:
-    max_requests: 1
+    max_calls: 1
     expect:
       milk:
         coles: {products: [col-milk-01, col-milk-02], tiers: [exact, equivalent], best_value: true}
         woolworths: {products: [wol-milk-01, wol-milk-02], tiers: [exact, equivalent], best_value: true}
       bread:
-        coles: {products: [col-white-bread-01, col-white-bread-02, col-wholemeal-bread-01, col-wholemeal-bread-02], tiers: [exact, equivalent]}
-        woolworths: {products: [wol-white-bread-01, wol-white-bread-02, wol-wholemeal-bread-01, wol-wholemeal-bread-02], tiers: [exact, equivalent]}
+        coles: {products: [col-white-bread-01, col-white-bread-02], tiers: [exact, equivalent]}
+        woolworths: {products: [wol-white-bread-01, wol-white-bread-02], tiers: [exact, equivalent]}
       eggs:
         coles: {products: [col-eggs-01, col-eggs-02], tiers: [exact, equivalent], best_value: true}
         woolworths: {products: [wol-eggs-01, wol-eggs-02], tiers: [exact, equivalent], best_value: true}
@@ -59,7 +59,7 @@
       - {name: diced tomatoes, quantity: 800, unit: g, brand: Bellvue}
       - {name: peas, quantity: 1000, unit: g, brand: Kingsway}
   checks:
-    max_requests: 1
+    max_calls: 1
     expect:
       tomato sauce:
         coles: {products: [col-tomato-sauce-02], tiers: [exact]}
@@ -84,7 +84,7 @@
       - {name: potato gems, quantity: 1000, unit: g}
       - {name: milk, quantity: 2000, unit: ml}
   checks:
-    max_requests: 2
+    max_calls: 2
     expect:
       sourdough:
         coles: {tiers: [not_found, substitute]}
@@ -107,7 +107,7 @@
       - {name: bacon, quantity: 250, unit: g}
       - {name: fries, quantity: 1000, unit: g}
   checks:
-    max_requests: 1
+    max_calls: 1
     expect:
       bacon:
         coles: {products: [col-bacon-01, col-bacon-02], tiers: [equivalent], best_value: true, on_special: true}
@@ -128,7 +128,7 @@
       - {name: chicken breast, quantity: 1000, unit: g}
       - {name: chicken thigh, quantity: 1000, unit: g}
   checks:
-    max_requests: 1
+    max_calls: 1
     expect:
       chicken breast:
         coles: {products: [col-chicken-breast-01, col-chicken-breast-02], tiers: [equivalent], best_value: true, on_special: false}
@@ -147,7 +147,7 @@
     items:
       - {name: yoghurt, quantity: 1000, unit: g}
   checks:
-    max_requests: 1
+    max_calls: 1
     expect:
       yoghurt:
         coles: {products: [col-yoghurt-01, col-yoghurt-02], tiers: [exact, equivalent], best_value: true, packs: 1}
@@ -163,7 +163,7 @@
     items:
       - {name: spaghetti, quantity: 400, unit: g}
   checks:
-    max_requests: 1
+    max_calls: 1
     expect:
       spaghetti:
         coles: {products: [col-spaghetti-01, col-spaghetti-02], tiers: [exact, equivalent], best_value: true, packs: 1}
@@ -181,7 +181,7 @@
       - {name: beef mince, quantity: 2400, unit: g}
       - {name: chicken thigh, quantity: 2000, unit: g}
   checks:
-    max_requests: 1
+    max_calls: 1
     expect:
       beef mince:
         coles: {products: [col-beef-mince-01, col-beef-mince-02], tiers: [exact, equivalent], best_value: true, packs: 5}
@@ -201,7 +201,7 @@
       - {name: salmon, quantity: 800, unit: g}
       - {name: whole chicken, quantity: 1600, unit: g}
   checks:
-    max_requests: 1
+    max_calls: 1
     expect:
       beef eye fillet:
         coles: {products: [col-eye-fillet-01], tiers: [equivalent]}
@@ -226,7 +226,7 @@
       - {name: baked beans, quantity: 840, unit: g}
       - {name: diced tomatoes, quantity: 800, unit: g}
   checks:
-    max_requests: 1
+    max_calls: 1
     expect:
       rice:
         coles: {products: [col-rice-01, col-rice-02], tiers: [exact, equivalent], best_value: true}
@@ -257,7 +257,7 @@
       - {name: saffron, quantity: 5, unit: g}
       - {name: eggs, quantity: 12, unit: each}
   checks:
-    max_requests: 2
+    max_calls: 2
     expect:
       dragon fruit:
         coles: {tiers: [not_found, substitute]}
@@ -280,7 +280,7 @@
       - {name: tomato sauce, quantity: 500, unit: ml, brand: Heinz}
       - {name: rice, quantity: 1000, unit: g}
   checks:
-    max_requests: 2
+    max_calls: 2
     expect:
       tomato sauce:
         coles: {tiers: [not_found]}

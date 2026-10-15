@@ -49,7 +49,7 @@ def test_case_set_has_the_planned_shape():
 def test_checks_are_known_and_requests_are_capped():
     validate_cases(CASES)
     for c in CASES:
-        assert isinstance(c.checks.get("max_requests"), int), c.id
+        assert isinstance(c.checks.get("max_calls"), int), c.id
         assert set(c.checks) <= check_names(c.agent), c.id
 
 
@@ -147,7 +147,7 @@ def ingredient_case(**checks) -> Case:
         id="t", agent="ingredient", notes="t",
         input={"meals": [{"meal_name": "M", "mains": ["x"], "people": 2, "days": 1,
                           "avoid": "dairy"}]},
-        checks={"max_requests": 1, **checks},
+        checks={"max_calls": 1, **checks},
     )  # fmt: skip
 
 
@@ -159,6 +159,7 @@ def run_ingredient(case: Case, *dishes) -> tuple[dict, Meter]:
 
 def _hooked(fake: FakeLLMClient, meter: Meter) -> FakeLLMClient:
     fake.on_request = meter.on_request
+    fake.start_generation = meter.start_generation
     return fake
 
 
@@ -170,7 +171,7 @@ def test_ingredient_case_passes_and_fails_on_the_checks():
     )
     good = dish("d1", ing("beef mince", 150), ing("potato", 200))
     outcomes, result = run_ingredient(case, good)
-    assert result.passed and result.metrics["requests"] == 1
+    assert result.passed and result.metrics["model_calls"] == 1
 
     bad = dish("d1", ing("beef mince", 450), ing("milk", 100, "ml"))
     _, result = run_ingredient(case, bad)
@@ -215,7 +216,7 @@ def test_price_checks_catch_a_wrong_product_and_a_worse_price():
     case = Case(
         id="t", agent="price", notes="t",
         input={"items": [{"name": "milk", "quantity": 2000, "unit": "ml"}]},
-        checks={"max_requests": 1, "expect": {"milk": {
+        checks={"max_calls": 1, "expect": {"milk": {
             "coles": {"products": ["col-milk-01", "col-milk-02"], "tiers": ["equivalent"],
                       "best_value": True},
             "woolworths": {"products": ["wol-milk-01", "wol-milk-02"], "best_value": True},
@@ -224,7 +225,7 @@ def test_price_checks_catch_a_wrong_product_and_a_worse_price():
     from evals.execute import Execution
 
     good = [priced("i1", COLES, "milk", "col-milk-01"), priced("i1", WOOL, "milk", "wol-milk-01")]
-    out = evaluate(case, Execution(price_subject(case, good)), Meter(requests=1))
+    out = evaluate(case, Execution(price_subject(case, good)), Meter(calls=1))
     assert all(o.passed for o in out), [o for o in out if not o.passed]
 
     # branded milk costs more, so best_value fails; coconut milk is the wrong product
@@ -232,7 +233,7 @@ def test_price_checks_catch_a_wrong_product_and_a_worse_price():
         priced("i1", COLES, "milk", "col-milk-02"),
         priced("i1", WOOL, "milk", "wol-coconut-milk-01"),
     ]
-    out = evaluate(case, Execution(price_subject(case, worse)), Meter(requests=1))
+    out = evaluate(case, Execution(price_subject(case, worse)), Meter(calls=1))
     failed = {o.name for o in out if not o.passed}
     assert (
         failed == {"best_value", "product_allowed", "tier"}
@@ -246,11 +247,11 @@ def test_requests_check_uses_the_meter():
     case = Case(
         id="t", agent="price", notes="t",
         input={"items": [{"name": "milk", "quantity": 2000, "unit": "ml"}]},
-        checks={"max_requests": 1, "expect": {}},
+        checks={"max_calls": 1, "expect": {}},
     )  # fmt: skip
     rows = [priced("i1", COLES, "milk", "col-milk-01"), priced("i1", WOOL, "milk", "wol-milk-01")]
-    out = evaluate(case, Execution(price_subject(case, rows)), Meter(requests=3))
-    assert [o.name for o in out if not o.passed] == ["requests"]
+    out = evaluate(case, Execution(price_subject(case, rows)), Meter(calls=3))
+    assert [o.name for o in out if not o.passed] == ["model_calls"]
 
 
 # ---- planner checks (through run_case with a scripted model) ----------------------------------
@@ -304,9 +305,9 @@ def test_e2e_checks_completed_and_budget():
     from evals.execute import Execution
 
     subject = E2ESubject(PlanRequest.model_validate({"meals": [case.input["meals"][0]]}), run, [])
-    out = evaluate(case, Execution(subject), Meter(requests=12))
+    out = evaluate(case, Execution(subject), Meter(calls=12))
     failed = {o.name for o in out if not o.passed}
-    assert failed == {"requests", "within_request_budget", "recommendation", "min_items"}
+    assert failed == {"model_calls", "within_call_budget", "recommendation", "min_items"}
 
 
 # ---- environment ------------------------------------------------------------------------------
@@ -337,7 +338,7 @@ def fake_result(agent, case_id, passed, repeat=1, **metrics) -> dict:
         "error_kind": None, "latency_s": 2.0,
         "outcomes": [{"name": "tier", "passed": passed, "detail": "x"},
                      {"name": "schema_valid", "passed": True, "detail": ""}],
-        "metrics": {"requests": 1, "input_tokens": 100, "output_tokens": 10,
+        "metrics": {"model_calls": 1, "input_tokens": 100, "output_tokens": 10,
                     "would_cost_usd": "0.001", "fell_back": False, **metrics},
     }  # fmt: skip
 
@@ -352,7 +353,7 @@ def test_summary_counts_cases_checks_and_repeats():
     assert (s["cases"], s["runs"], s["passed"]) == (4, 8, 7)
     assert s["repeat_rates"] == [0.75, 1.0] and s["rate_min"] == 0.75 and s["rate_mean"] == 0.875
     assert s["checks"]["tier"] == {"passed": 7, "total": 8, "rate": 0.875}
-    assert s["requests"] == 8 and s["would_cost_usd"] == pytest.approx(0.008)
+    assert s["model_calls"] == 8 and s["would_cost_usd"] == pytest.approx(0.008)
 
 
 BASELINE = {"pass_rates": {"ingredient": 1.0, "price": 0.95, "planner": 1.0}}
@@ -427,3 +428,101 @@ def test_ingredient_subject_dataclass_is_usable():
     fake = FakeLLMClient([batch(dish("d1", ing("potato", 100)))])
     result = run_ingredient_agent(request, fake, InMemoryDishCache(), bypass_cache=True)
     assert IngredientSubject(request, result).result.items[0].name == "potato"
+
+
+# ---- counting model behaviour, not infrastructure ---------------------------------------------
+
+
+def start(attempt: int, kind: str = "request"):
+    from grocery_planner.llm.types import GenerationStart
+
+    return GenerationStart("m", attempt, kind, False, "s", "u", None, 1)
+
+
+def test_meter_counts_calls_repairs_and_transport_retries_separately():
+    m = Meter()
+    m.start_generation(start(1))  # first call
+    m.start_generation(start(2))  # retried after a 503
+    m.start_generation(start(3))  # and again
+    m.start_generation(start(1, "repair"))  # schema repair
+    m.start_generation(start(2, "repair"))  # the repair itself retried
+    m.start_generation(start(1, "tool_round"))
+    assert (m.calls, m.repairs, m.model_calls, m.transport_retries) == (2, 1, 3, 3)
+
+
+def test_transport_retries_never_fail_a_case():
+    from evals.execute import Execution
+
+    case = BY_ID["price-pack-within-tolerance"]  # allows 1 call
+    rows = [
+        priced("i1", COLES, "spaghetti", "col-spaghetti-01", tier="exact"),
+        priced("i1", WOOL, "spaghetti", "wol-spaghetti-01", tier="exact"),
+    ]
+    meter = Meter()
+    for attempt in (1, 2, 3):
+        meter.start_generation(start(attempt))
+    meter.start_generation(start(1, "repair"))
+    out = evaluate(case, Execution(price_subject(case, rows)), meter)
+    calls = next(o for o in out if o.name == "model_calls")
+    assert calls.passed and "2 transport retries" in calls.detail and "1 repairs" in calls.detail
+    meter.start_generation(start(1))  # a second question really is a second call
+    out = evaluate(case, Execution(price_subject(case, rows)), meter)
+    assert not next(o for o in out if o.name == "model_calls").passed
+
+
+def test_infrastructure_errors_are_not_scored_and_a_daily_quota_stops_the_run():
+    from evals.harness import EvalQuotaExhausted
+    from evals.run import run_all
+    from grocery_planner.llm.types import LLMUnavailable, QuotaExhausted
+
+    case = BY_ID["ing-friday-dinner"]
+    for exc in (LLMUnavailable("503"), QuotaExhausted("per_minute")):
+        fake = FakeLLMClient([exc])
+        r = run_case(case, lambda meter, hooks, f=fake: _hooked(f, meter), 1)
+        assert r.error_kind == "infra" and r.scored is False and r.outcomes == []
+    fake = FakeLLMClient([QuotaExhausted("per_day")])
+    with pytest.raises(EvalQuotaExhausted):
+        run_case(case, lambda meter, hooks: _hooked(fake, meter), 1)
+
+    # in run_all the quota stops everything: earlier results are kept, nothing later runs
+    script = [LLMUnavailable("503"), QuotaExhausted("per_day"), AssertionError("must not run")]
+    fake = FakeLLMClient(script)
+    cases = [BY_ID["ing-friday-dinner"], BY_ID["ing-avoid-nuts"], BY_ID["ing-odd-dish-name"]]
+    lines: list[str] = []
+    results, quota = run_all(cases, lambda meter, hooks: _hooked(fake, meter), 1, lines.append)
+    assert [r.id for r in results] == ["ing-friday-dinner"] and not results[0].scored
+    assert quota and any(line.startswith("QUOTA") for line in lines)
+
+
+def test_schema_failure_is_scored_but_infrastructure_is_not():
+    rows = results("price", [True, True, True, True])
+    rows[0].update(scored=False, passed=False, outcomes=[], error_kind="infra", error="503")
+    s = summarize(rows)["price"]
+    assert (s["runs"], s["scored"], s["unscored"], s["passed"]) == (4, 3, 1, 3)
+    assert s["pass_rate"] == 1.0
+
+
+def test_gate_fails_when_too_many_runs_were_lost_to_infrastructure():
+    rows = results("planner", [True] * 8)
+    for r in rows[:3]:
+        r.update(scored=False, passed=False, outcomes=[], error_kind="infra")
+    fails = gate(summarize(rows), None)
+    assert len(fails) == 1 and "infrastructure errors" in fails[0]
+    rows = results("planner", [True] * 8)
+    rows[0].update(scored=False, passed=False, outcomes=[], error_kind="infra")
+    assert gate(summarize(rows), None) == []  # 1 of 8 is tolerated
+
+
+def test_report_shows_repairs_retries_downgrade_kinds_and_a_quota_banner():
+    rows = results("price", [True, True])
+    rows[0]["metrics"].update(
+        repairs=1, transport_retries=2, downgrades=1, downgrade_kinds={"different_food": 1}
+    )
+    meta = {"timestamp": "t", "model": "m", "repeat": 1, "cases": 2, "as_of": "2026-10-12",
+            "status": "quota", "quota_message": "Daily quota used up.", "completed_runs": 2,
+            "planned_runs": 5}  # fmt: skip
+    summary = summarize(rows)
+    assert summary["price"]["downgrade_kinds"] == {"different_food": 1}
+    md = render_markdown(meta, summary, [], None, rows)
+    assert "QUOTA: the run stopped early" in md and "2 of 5 case runs" in md
+    assert "NOT GRADED" in md and "different_food: 1" in md and "| price | 2 | 1 | 2 |" in md

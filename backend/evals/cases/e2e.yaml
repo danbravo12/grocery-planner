@@ -10,7 +10,7 @@
     meals:
       - {meal_name: Friday dinner, mains: [fillet mignon], sides: [potato salad, fries], people: 2, days: 1}
   checks:
-    max_requests: 9
+    max_calls: 9
     min_items: 3
     recommendation: [no_meaningful_difference]
 
@@ -22,7 +22,7 @@
       - {meal_name: Monday bolognese, mains: [spaghetti bolognese], people: 4, days: 3}
       - {meal_name: Tuesday chilli, mains: [chilli con carne], people: 4, days: 3}
   checks:
-    max_requests: 9
+    max_calls: 9
     min_items: 6
     recommendation: [no_meaningful_difference]
 
@@ -39,6 +39,6 @@
     include_pantry_staples: true
     parameters: {savings_threshold_dollars: "10"}
   checks:
-    max_requests: 9
+    max_calls: 9
     min_items: 8
     recommendation: [no_meaningful_difference]

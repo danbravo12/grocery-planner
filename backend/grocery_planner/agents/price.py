@@ -32,6 +32,7 @@ from grocery_planner.tools.price_lookup import (
     packs_needed,
     special_active,
 )
+from grocery_planner.tools.vocabulary import same_food
 
 # Bump when SYSTEM_PROMPT or the output schema changes; recorded on every result for traces.
 PRICE_PROMPT_VERSION = "2"
@@ -113,6 +114,7 @@ class MatchBatch(BaseModel):
 
 
 class Downgrade(BaseModel):
+    kind: str = ""  # invented_candidate, no_pick, different_food, exact_downgraded
     item_id: str
     store: Store | None
     from_tier: MatchTier
@@ -264,7 +266,9 @@ class _Acc:
 
     def downgrade(self, item_id, store, frm, to, reason, kind) -> None:
         self.downgrades.append(
-            Downgrade(item_id=item_id, store=store, from_tier=frm, to_tier=to, reason=reason)
+            Downgrade(
+                kind=kind, item_id=item_id, store=store, from_tier=frm, to_tier=to, reason=reason
+            )
         )
         self.flags.append(PriceFlag(item_id=item_id, store=store, kind=kind, message=reason))
 
@@ -392,6 +396,17 @@ def _enforce_pick(st: _State, store: Store, pick: PickOut, acc: _Acc) -> _Pick:
         )
         return _Pick(None, "not_found", "low", pick.reason)
     tier = pick.tier  # pack size never changes the tier
+    if tier in USABLE and not same_food(st.item.name, chosen.product.product_id):
+        # A product is exactly one generic ingredient. Anything else is at best a substitute.
+        acc.downgrade(
+            item_id,
+            store,
+            tier,
+            "substitute",
+            f"'{chosen.product.product_name}' is not {st.item.name}: a different food",
+            "different_food",
+        )
+        tier = "substitute"
     return _Pick(chosen, tier, pick.confidence, pick.reason)
 
 

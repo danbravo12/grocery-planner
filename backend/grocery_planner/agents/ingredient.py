@@ -24,6 +24,7 @@ from grocery_planner.domain.ingredients import (
 )
 from grocery_planner.domain.request import PlanRequest
 from grocery_planner.llm.types import LLMClient, Usage
+from grocery_planner.tools.avoid_rules import avoid_violations
 from grocery_planner.tools.vocabulary import VocabEntry, ingredient_vocabulary
 
 # Bump when SYSTEM_PROMPT or the output schema changes: it is part of the dish_cache key, so rows
@@ -92,10 +93,14 @@ SANITY_RANGES: dict[tuple[str, str], tuple[Decimal, Decimal]] = {
 
 
 def dish_problems(
-    dish: DishResult, vocab: dict[str, VocabEntry], dish_name: str | None = None
+    dish: DishResult,
+    vocab: dict[str, VocabEntry],
+    dish_name: str | None = None,
+    avoid: str | None = None,
 ) -> list[str]:
-    """Things wrong with one dish: a vocabulary claim that is false, the wrong unit, or (when the
-    dish name is given) a brand that the dish text does not contain."""
+    """Things wrong with one dish: a vocabulary claim that is false, the wrong unit, a brand that
+    the dish text does not contain (when the dish name is given), or an ingredient that a known
+    avoid category forbids (when the avoid text is given)."""
     by_lower = {name.lower(): e for name, e in vocab.items()}
     problems = []
     for ing in dish.ingredients:
@@ -121,6 +126,7 @@ def dish_problems(
                 f"brand '{ing.brand}' for '{ing.name}' is not named in the dish text; "
                 "leave brand empty unless the dish text names it"
             )
+    problems += avoid_violations(avoid, [i.name for i in dish.ingredients], vocab)
     return problems
 
 
@@ -128,6 +134,7 @@ def batch_model(
     vocab: dict[str, VocabEntry],
     expected_ids: Iterable[str],
     dish_names: dict[str, str] | None = None,
+    avoids: dict[str, str | None] | None = None,
 ) -> type[ExpansionBatch]:
     """The output type for one model call: ExpansionBatch plus checks that make the model layer's
     schema repair fire on vocabulary and unit mistakes and on missing or unknown dish ids."""
@@ -144,7 +151,9 @@ def batch_model(
                 )
             for dish in self.dishes:
                 name = (dish_names or {}).get(dish.dish_id)
-                problems += [f"dish {dish.dish_id}: {p}" for p in dish_problems(dish, vocab, name)]
+                avoid = (avoids or {}).get(dish.dish_id)
+                found = dish_problems(dish, vocab, name, avoid)
+                problems += [f"dish {dish.dish_id}: {p}" for p in found]
             if problems:
                 raise ValueError("; ".join(problems))
             return self
@@ -199,7 +208,7 @@ def run_ingredient_agent(
     results: dict[tuple[str, str, str], DishResult] = {}
     for key, dish in dishes.items():
         cached = None if bypass_cache else cache.get(*key)
-        if cached is not None and not dish_problems(cached, vocab, dish.dish_name):
+        if cached is not None and not dish_problems(cached, vocab, dish.dish_name, dish.avoid):
             results[key] = cached
     misses = [d for k, d in dishes.items() if k not in results]
     hits = len(dishes) - len(misses)
@@ -217,7 +226,10 @@ def run_ingredient_agent(
             ],
         }
         output_type = batch_model(
-            vocab, [d.dish_id for d in misses], {d.dish_id: d.dish_name for d in misses}
+            vocab,
+            [d.dish_id for d in misses],
+            {d.dish_id: d.dish_name for d in misses},
+            {d.dish_id: d.avoid for d in misses},
         )
         result = llm.generate(
             SYSTEM_PROMPT, json.dumps(payload, separators=(",", ":")), output_type, temperature=0.1

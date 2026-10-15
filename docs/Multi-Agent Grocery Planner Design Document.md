@@ -73,6 +73,7 @@ This agent turns the meal form into one consolidated, quantity-scaled list of pu
 - Avoid is per meal, so the merged list reflects each meal's own constraints.
 - It does not ask clarifying questions. A contradiction (for example avoid: dairy with a creamy potato salad) is resolved by substitution and noted.
 - Names and units come from the vocabulary: the model must use a vocabulary name with its canonical unit when one fits, and code validates this (a mismatch triggers one schema repair). There is no unit-conversion tool.
+- **Avoid guard:** a small table maps known avoid categories (dairy, gluten, nuts, peanuts, eggs, shellfish, fish, pork, beef, meat, soy) to the vocabulary items they forbid. Code normalises each dish's avoid text, matches the known categories, and if the model's output contains a forbidden item for that dish, it goes back for the one schema repair with the violation listed (a cached dish that breaks the current avoid counts as a miss). Avoid text that matches no known category is not checked and is logged as relying on the model alone.
 - Dish expansion is cached per dish and normalised avoid text, written only after the output passes schema validation (see Data layer), and scaling, merging and rounding are code, not the model.
 
 ## Price agent
@@ -99,6 +100,7 @@ This agent finds a comparable product for each purchasable item at each store an
 - **Generic item ("bacon"):** pick the best-value acceptable product at each store, branded or house brand, from products of the same type and a comparable quality band. A popular brand on special can beat the house brand.
 - Each pick is labelled house brand, branded, or on special.
 - The agent flags when a price gap comes from a tier difference rather than the store's pricing, so savings are not fake.
+- **Same food:** every catalogue product belongs to exactly one generic ingredient, the one it was seeded under (coconut milk is not milk, hash browns are not potato gems). An exact or equivalent pick must be the item's own ingredient (its vocabulary name or one of that ingredient's search terms); otherwise code caps it at substitute and records a `different_food` downgrade. This is code, not prompt.
 - **Pack-size tolerance:** pack size never changes a match tier, which depends only on the product (type, quality band, and brand for exact). Instead, code compares the quantities each store's pick makes you buy (packs × pack size): if they differ by more than 15% (relative to the smaller), the item gets a `pack_gap` flag carrying both quantities. Leftover is shown, not credited.
 
 **Match tiers per item per store**
@@ -235,6 +237,8 @@ Tracing shows what each run did, and evals show whether a prompt or model change
 | End to end | 3 | The run completes, within the 9-request budget, with the expected recommendation | Full orchestrator runs |
 
 **How a run is made reproducible:** the runner uses the eval API key (`GEMINI_EVAL_API_KEY`, never the demo's), `APP_ENV=eval`, `bypass_cache=True` (nothing read from or written to the dish cache), the fallback model switched off so one pinned model answers (a case fails if anything else did), and a fixed `as_of` of 2026-10-12 so seeded specials and ages never drift. Temperature stays at the agents' 0.1, so a case can pass in one run and fail in the next; `--repeat N` measures that.
+
+**What counts as a request:** checks count model behaviour, not infrastructure. A case's call limit counts first calls and tool rounds; repairs are counted and reported next to it, and the end-to-end budget (9) counts repairs too. Transport retries (5xx, timeouts, per-minute 429s) are reported per case and per run but never fail a case. A case lost to such an error after its retries is not scored (it is listed, and a run with more than 25% of an agent's runs lost this way fails the gate as untrustworthy). A per-day 429 stops the whole run with a clear quota status (exit code 3) and nothing is graded.
 
 **Scores and the baseline rule:** the runner reports cases passed over total per agent, a pass rate for every check name, and the requests, tokens, would-be cost, downgrades and repairs used. `evals/baseline.json` holds each agent's pass rate from the last approved run. A run fails (exit code 1) when any agent's pass rate is **more than 10 points below its baseline**, **below an absolute floor** (ingredient 85%, price 85%, planner 90%), or when any answer came from a fallback model. The end-to-end cases have no floor of their own: with three cases one failure is a 33-point drop. After a deliberate prompt or model change, the baseline is rewritten by hand (`--write-baseline`) and reviewed like code.
 

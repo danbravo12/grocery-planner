@@ -468,11 +468,6 @@ def _e2e_implicit(s: E2ESubject, params: dict[str, Any]) -> list[Outcome]:
             f"status {r.status}"
             + (f" ({r.failure_reason or r.stop_reason})" if r.status != "completed" else ""),
         ),
-        _o(
-            "within_request_budget",
-            r.requests <= ESTIMATED_REQUESTS,
-            f"{r.requests} requests, budget {ESTIMATED_REQUESTS}",
-        ),
     ]
 
 
@@ -513,12 +508,12 @@ IMPLICIT = {
     "planner": _pl_implicit,
     "e2e": _e2e_implicit,
 }
-SHARED = {"max_requests"}  # accepted by every agent
+SHARED = {"max_calls"}  # accepted by every agent
 IMPLICIT_NAMES: dict[str, list[str]] = {
     "ingredient": ["brand_only_if_named", "unique_lines", "pantry_staples_respected"],
     "price": ["valid_product_ids", "rows_complete"],
     "planner": ["no_invented_amounts", "tip_rules", "tool_only_when_split_can_win"],
-    "e2e": ["completed", "within_request_budget"],
+    "e2e": ["completed", "within_call_budget"],
 }
 
 
@@ -527,7 +522,7 @@ def check_names(agent: str) -> set[str]:
 
 
 def evaluate(case, execution: Execution, meter: Meter) -> list[Outcome]:
-    """All outcomes for a case: schema_valid, no_fallback, requests, then the case's checks."""
+    """All outcomes for a case: schema_valid, no_fallback, model_calls, then the case's checks."""
     s = execution.subject
     fell_back = meter.fell_back or bool(getattr(getattr(s, "run", None), "fell_back", False))
     out = [
@@ -537,10 +532,15 @@ def evaluate(case, execution: Execution, meter: Meter) -> list[Outcome]:
             f"models {meter.models}" if fell_back else "primary model only",
         )
     ]
-    limit = case.checks.get("max_requests")
+    limit = case.checks.get("max_calls")  # model calls; repairs and transport retries not counted
     if limit is not None:
         out.append(
-            _o("requests", meter.requests <= limit, f"{meter.requests} requests, max {limit}")
+            _o(
+                "model_calls",
+                meter.calls <= limit,
+                f"{meter.calls} calls (+{meter.repairs} repairs, {meter.transport_retries} "
+                f"transport retries), max {limit}",
+            )
         )
     if s is None:
         out.append(_o("schema_valid", False, execution.error or "no output"))
@@ -557,4 +557,12 @@ def evaluate(case, execution: Execution, meter: Meter) -> list[Outcome]:
             continue
         out.extend(CHECKS[case.agent][name](s, value))
     out.extend(IMPLICIT[case.agent](s, params))
+    if case.agent == "e2e":  # the orchestrator reserves 9 calls; repairs count against it
+        out.append(
+            _o(
+                "within_call_budget",
+                meter.model_calls <= ESTIMATED_REQUESTS,
+                f"{meter.model_calls} model calls, budget {ESTIMATED_REQUESTS}",
+            )
+        )
     return out

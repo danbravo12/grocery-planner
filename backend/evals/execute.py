@@ -9,7 +9,7 @@ from typing import Any
 
 from evals.builders import build_rows
 from evals.cases import Case
-from evals.harness import ANCHOR_ISO, Meter, scrub
+from evals.harness import ANCHOR_ISO, EvalQuotaExhausted, Meter, scrub
 from grocery_planner.agents.ingredient import run_ingredient_agent
 from grocery_planner.agents.planner import PlannerFacts, PlannerResult, build_facts, run_planner
 from grocery_planner.agents.price import PriceAgentResult, price_items
@@ -19,7 +19,12 @@ from grocery_planner.domain import PlannerConfig, PricedItem
 from grocery_planner.domain.ingredients import IngredientItem, IngredientList
 from grocery_planner.domain.request import PlanRequest
 from grocery_planner.llm import ModelHooks
-from grocery_planner.llm.types import LLMError, SchemaValidationFailed
+from grocery_planner.llm.types import (
+    LLMError,
+    LLMUnavailable,
+    QuotaExhausted,
+    SchemaValidationFailed,
+)
 from grocery_planner.orchestrator import InMemoryRunStore, Runner, RunnerSettings
 from grocery_planner.orchestrator.models import RunRecord, StepRecord
 from grocery_planner.tools.price_lookup import SeededFilePriceSource
@@ -67,7 +72,7 @@ Subject = IngredientSubject | PriceSubject | PlannerSubject | E2ESubject
 class Execution:
     subject: Subject | None
     error: str | None = None
-    error_kind: str | None = None  # schema | model | internal
+    error_kind: str | None = None  # schema | model | internal (scored), infra (not scored)
     latency_s: float = 0.0
     extra_metrics: dict[str, Any] = field(default_factory=dict)
 
@@ -134,6 +139,10 @@ def _e2e(case: Case, make_llm: LLMFactory, meter: Meter) -> Subject:
     )
     run_id = runner.create_run(request, config, ANCHOR, bypass_cache=True)
     run = runner.run_plan(run_id)
+    if run.failure_reason in ("daily_quota", "budget_exhausted"):
+        raise EvalQuotaExhausted(run.user_message or "daily quota used up")
+    if run.failure_reason in ("model_unavailable", "rate_limited", "busy"):
+        raise LLMUnavailable(f"run failed with {run.failure_reason}")  # infrastructure
     return E2ESubject(request, run, list(runner.store.get_steps(run_id)))
 
 
@@ -150,6 +159,14 @@ def execute(case: Case, make_llm: LLMFactory, meter: Meter) -> Execution:
     try:
         subject = RUNNERS[case.agent](case, make_llm, meter)
         return Execution(subject, latency_s=time.perf_counter() - start)
+    except EvalQuotaExhausted:
+        raise  # stops the whole run
+    except QuotaExhausted as exc:
+        if exc.kind == "per_day":  # includes our own BudgetExhausted
+            raise EvalQuotaExhausted(str(exc)) from exc
+        kind, msg = "infra", f"{type(exc).__name__}: {exc}"[:300]  # per-minute: not the model
+    except LLMUnavailable as exc:  # 5xx / timeouts that outlasted the retries
+        kind, msg = "infra", f"{type(exc).__name__}: {exc}"[:300]
     except SchemaValidationFailed as exc:
         kind, msg = "schema", f"SchemaValidationFailed: {'; '.join(exc.errors)[:300]}"
     except LLMError as exc:
