@@ -1,11 +1,22 @@
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from grocery_planner.env import getenv
 
 
 class ConfigError(RuntimeError):
     """The environment is not fit to start the API (it refuses to start)."""
+
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+def _dist() -> Path | None:
+    """FRONTEND_DIST, else frontend/dist in the repo when it has been built."""
+    chosen = (getenv("FRONTEND_DIST") or "").strip()
+    path = Path(chosen) if chosen else REPO_ROOT / "frontend" / "dist"
+    return path if (path / "index.html").is_file() else None
 
 
 def _flag(name: str) -> bool:
@@ -19,6 +30,7 @@ class ApiSettings:
     trusted_proxy: bool = False  # read the client IP from X-Forwarded-For
     sample_run_id: str | None = None
     ip_hash_secret: str | None = None
+    frontend_dist: Path | None = None  # the built frontend, served from the same origin
     use_memory: bool = False  # in-process store and seed file instead of Postgres (local dev)
     max_workers: int = 2
     max_queued: int = 10
@@ -68,6 +80,7 @@ class ApiSettings:
             trusted_proxy=_flag("TRUSTED_PROXY"),
             sample_run_id=(getenv("SAMPLE_RUN_ID") or "").strip() or None,
             ip_hash_secret=(getenv("IP_HASH_SECRET") or "").strip() or None,
+            frontend_dist=_dist(),
             use_memory=(os.environ.get("API_STORE") or getenv("API_STORE") or "").lower()
             == "memory",
         )

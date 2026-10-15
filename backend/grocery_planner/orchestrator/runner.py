@@ -287,6 +287,33 @@ class Runner:
             swept.append(run_id)
         return swept
 
+    def sweep_queued(
+        self,
+        in_queue: Callable[[str], bool],
+        now: datetime | None = None,
+        grace: timedelta = timedelta(seconds=30),
+        max_age: timedelta = timedelta(minutes=10),
+    ) -> list[str]:
+        """Fail runs that are still 'queued' but will never start: not in this process's queue
+        (the queue is in memory, so after a restart nothing remembers them) or waiting for more
+        than `max_age`. A run younger than `grace` is left alone: its row is written just before
+        it is queued. The reservation is released."""
+        now = now or datetime.now(UTC)
+        swept = []
+        for run_id, created in self.store.queued_runs():
+            age = now - created
+            if not (age > max_age or (age > grace and not in_queue(run_id))):
+                continue
+            if self.store.get_run(run_id).status != "queued":
+                continue
+            self.store.update_run(
+                run_id, status="failed", failure_reason="restarted", completed_at=now,
+                user_message="The server restarted before your run started. Please try again.",
+            )  # fmt: skip
+            self.budget.release(run_id)
+            swept.append(run_id)
+        return swept
+
     # ---- the run ------------------------------------------------------------------------
 
     def run_plan(self, run_id: str, already_reserved: bool = False) -> RunRecord:

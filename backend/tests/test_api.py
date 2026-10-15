@@ -4,7 +4,7 @@ import json
 import threading
 import time
 from contextlib import contextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
@@ -700,3 +700,123 @@ def test_prune_keeps_the_last_week():
         }  # fmt: skip
     assert budget.prune(7) == 4  # 8 and 30 days old, in both tables
     assert {k[2] for k in budget.counters} == {"k0", "k6", "k7"}
+
+
+# ---- queued runs that a restart orphaned -------------------------------------------------------
+
+
+def old_queued_run(services, budget, age_seconds):
+    """A run row left 'queued' by a previous process, with its budget still reserved."""
+    run_id = services.runner.create_run(REQUEST, PlannerConfig(), AS_OF)
+    budget.reserve(run_id, 9)
+    store = services.runner.store
+    store.runs[run_id] = store.runs[run_id].model_copy(
+        update={"created_at": datetime.now(UTC) - timedelta(seconds=age_seconds)}
+    )
+    return run_id
+
+
+def test_startup_fails_queued_runs_the_new_process_does_not_hold():
+    app, services, store, budget = build()
+    orphan = old_queued_run(services, budget, 120)
+    fresh = old_queued_run(services, budget, 5)  # row written just before it is queued: left alone
+    assert budget._row(budget._today(), "fake-model")["reserved"] == 18
+    with TestClient(app) as client:
+        wait_for(lambda: store.runs[orphan].status == "failed")
+        run = store.runs[orphan]
+        assert run.failure_reason == "restarted"
+        assert run.user_message == "The server restarted before your run started. Please try again."
+        assert run.completed_at is not None
+        assert store.runs[fresh].status == "queued"
+        assert budget._row(budget._today(), "fake-model")["reserved"] == 9  # orphan released
+        view = client.get(f"/api/runs/{orphan}").json()
+        assert view["status"] == "failed" and view["failure_reason"] == "restarted"
+        events = [e for e in stream_all(client, f"/api/runs/{orphan}/events") if e["event"]]
+        assert [e["event"] for e in events] == ["run_failed"]
+        assert events[0]["data"]["data"]["reason"] == "restarted"
+
+
+def test_the_sweep_leaves_queued_runs_the_process_holds_and_fails_ones_waiting_too_long():
+    gate = Gate(block_from=1)
+    app, services, store, budget = build(llm_factory=gate.factory())
+    with TestClient(app) as client:
+        ids = []
+        for _ in range(3):  # 2 running, 1 waiting
+            client.cookies.clear()
+            ids.append(post(client).json()["run_id"])
+        wait_for(lambda: services.queue.counts() == (2, 1))
+        waiting = ids[2]
+        # long enough to be past the grace period, but the queue holds it: not swept
+        store.runs[waiting] = store.runs[waiting].model_copy(
+            update={"created_at": datetime.now(UTC) - timedelta(minutes=5)}
+        )
+        assert services.runner.sweep_queued(lambda r: services.queue.position(r) is not None) == []
+        # older than ten minutes: failed even though it is queued here
+        store.runs[waiting] = store.runs[waiting].model_copy(
+            update={"created_at": datetime.now(UTC) - timedelta(minutes=11)}
+        )
+        swept = services.runner.sweep_queued(lambda r: services.queue.position(r) is not None)
+        assert swept == [waiting] and store.runs[waiting].failure_reason == "restarted"
+        gate.open()
+        wait_for(lambda: done(store, ids[0]) and done(store, ids[1]))
+        wait_for(lambda: services.queue.counts() == (0, 0))
+        # the worker that later pulled the swept run did not start it
+        assert store.runs[waiting].status == "failed" and store.steps[waiting] == []
+        assert budget._row(budget._today(), "fake-model")["reserved"] == 0
+
+
+# ---- the built frontend, same origin -----------------------------------------------------------
+
+
+def test_the_built_frontend_is_served_with_a_fallback_for_client_side_routes(tmp_path):
+    dist = tmp_path / "dist"
+    (dist / "assets").mkdir(parents=True)
+    (dist / "index.html").write_text("<html>app</html>")
+    (dist / "assets" / "app-abc123.js").write_text("console.log(1)")
+    (dist / "favicon.svg").write_text("<svg/>")
+    (tmp_path / "secret.txt").write_text("outside the build")
+    app, _, _, _ = build(settings=ApiSettings(frontend_dist=dist, **FAST))
+    with TestClient(app) as client:
+        assert client.get("/").text == "<html>app</html>"
+        runs = client.get("/runs/3a1f9a52-0000-4000-8000-000000000000")  # a client-side route
+        assert runs.status_code == 200 and runs.text == "<html>app</html>"
+        assert runs.headers["cache-control"] == "no-cache"
+        asset = client.get("/assets/app-abc123.js")
+        assert asset.text == "console.log(1)" and "immutable" in asset.headers["cache-control"]
+        assert client.get("/favicon.svg").text == "<svg/>"
+        # the API still answers as the API, and unknown API paths are JSON 404s, not the app
+        assert client.get("/health").json() == {"status": "ok"}
+        r = client.get("/api/nothing")
+        assert r.status_code == 404 and r.json()["code"] == "not_found"
+        # nothing outside the build directory
+        assert client.get("/..%2Fsecret.txt").text == "<html>app</html>"
+        assert "outside" not in client.get("/%2e%2e/secret.txt").text
+
+
+def test_without_a_build_unknown_paths_are_json_404s():
+    app, _, _, _ = build()
+    with TestClient(app) as client:
+        r = client.get("/runs/abc")
+        assert r.status_code == 404 and r.json()["code"] == "not_found"
+
+
+def test_the_openapi_contract_types_every_public_response():
+    app, _, _, _ = build(settings=ApiSettings(app_env="dev", **FAST))
+    with TestClient(app) as client:
+        spec = client.get("/openapi.json").json()
+    schemas = spec["components"]["schemas"]
+    for name in ("RunView", "Step", "Recommendation", "Condition", "Pick", "CreateRun",
+                 "Availability", "ErrorBody", "ValidationErrorBody", "RunAccepted"):  # fmt: skip
+        assert name in schemas, name
+    post = spec["paths"]["/api/runs"]["post"]
+    assert post["requestBody"]["content"]["application/json"]["schema"]["$ref"].endswith(
+        "CreateRun"
+    )
+    assert set(post["responses"]) >= {"202", "400", "413", "422", "429", "503"}
+    assert spec["paths"]["/api/runs/{run_id}"]["get"]["responses"]["200"]["content"][
+        "application/json"
+    ]["schema"]["$ref"].endswith("RunView")
+    forbidden = {"visitor", "ip", "reserved", "langfuse_trace_id", "cost_usd"}
+    assert not forbidden & all_keys(schemas["RunView"]) & {"visitor", "ip"}
+    for name, schema in schemas.items():
+        assert not forbidden & set(schema.get("properties", {})), name

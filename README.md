@@ -2,7 +2,7 @@
 
 A multi-agent grocery planner: meals in, shopping list, supermarket prices, and a where-to-shop recommendation out. Full design: [docs/Multi-Agent Grocery Planner Design Document.md](docs/Multi-Agent%20Grocery%20Planner%20Design%20Document.md). Choices the design doc left open are logged in [docs/DECISIONS.md](docs/DECISIONS.md).
 
-**Status: step 12 of the build plan.** Backend complete: ingredient, price and planner agents, orchestrator, guardrails, tracing, evals, GitHub Actions and the HTTP API (create a run, read it, follow it over SSE). There is no frontend yet.
+**Status: step 12 of the build plan.** Backend complete: ingredient, price and planner agents, orchestrator, guardrails, tracing, evals, GitHub Actions and the HTTP API (create a run, read it, follow it over SSE). The frontend (form, live progress, result view) is in `frontend/`.
 
 ## Layout
 
@@ -80,6 +80,24 @@ curl localhost:8000/api/runs/<run_id>           # the finished run
 | `GET /api/runs/{id}/events` | SSE: replays from `Last-Event-ID` (or `?after=`), then live; heartbeat comment every 15 s; closes after `run_completed` or `run_failed` (a stopped run too); `queued` while waiting | 200; 404 |
 
 Errors are `{code, message}`. Settings (see `.env.example`): `FRONTEND_ORIGINS` (CORS), `TRUSTED_PROXY`, `IP_HASH_SECRET` and `SAMPLE_RUN_ID` (both required with `APP_ENV=prod`, or the API will not start), `API_STORE=memory`. At most 2 plans run at once with up to 10 waiting; a 13th request gets 503 `busy`. The queue is in one process, like the per-minute limiter.
+
+## Run the frontend
+
+The app is `frontend/` (React, Vite, TypeScript, Tailwind). In production FastAPI serves the built app itself, so the page and the API share one origin: no CORS, and the visitor cookie just works. Unknown paths that are not `/api` return `index.html`, so a reload of `/runs/<id>` works.
+
+```bash
+# one terminal: the API
+cd backend && uv run uvicorn grocery_planner.main:app --port 8000
+# another: the dev server with hot reload (proxies /api to :8000)
+cd frontend && npm ci && npm run dev          # http://localhost:5173
+
+# or build once and let FastAPI serve it
+cd frontend && npm run build                  # then open http://localhost:8000
+```
+
+Checks: `npm run typecheck`, `npm run lint`, `npm test` (Vitest and Testing Library), `npm run e2e` (a Playwright smoke test with every `/api` route mocked). The API types in `frontend/src/api/types.ts` are generated from the OpenAPI schema (`npm run gen:types`); CI regenerates them and fails if the committed file differs.
+
+![The result view on a desktop](docs/screenshots/desktop-3-result.png)
 
 ## Database: migrate, seed, integration tests
 

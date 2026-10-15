@@ -17,10 +17,11 @@ from typing import Any, Protocol
 from fastapi import FastAPI, Request, Response
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
-from pydantic import Field, ValidationError
+from fastapi.responses import FileResponse, StreamingResponse
+from pydantic import Field
 
-from grocery_planner.api.errors import ApiError, install_error_handlers, validation_fields
+from grocery_planner.api import schemas
+from grocery_planner.api.errors import ApiError, install_error_handlers
 from grocery_planner.api.queue import RunQueue
 from grocery_planner.api.settings import ApiSettings
 from grocery_planner.api.views import run_view, step_view
@@ -64,20 +65,56 @@ class CreateRun(PlanRequest):
 # ---- request helpers ---------------------------------------------------------------------------
 
 
-async def read_json_body(request: Request, limit: int) -> Any:
-    declared = request.headers.get("content-length")
-    if declared and declared.isdigit() and int(declared) > limit:
-        raise ApiError(413, "body_too_large", f"The request body is limited to {limit} bytes.")
-    chunks, total = [], 0
-    async for chunk in request.stream():
-        total += len(chunk)
-        if total > limit:
-            raise ApiError(413, "body_too_large", f"The request body is limited to {limit} bytes.")
-        chunks.append(chunk)
-    try:
-        return json.loads(b"".join(chunks) or b"null")
-    except (ValueError, UnicodeDecodeError):
-        raise ApiError(400, "invalid_json", "The request body must be valid JSON.") from None
+class BodyLimitMiddleware:
+    """Refuse a request body over `limit` bytes with a 413, whether or not it declares its length.
+    A pure ASGI middleware, so the limit applies before any body parsing. (FastAPI turns an
+    exception raised while it reads the body into a 400, so a body that grows past the limit is
+    cut short instead and whatever the app answers is replaced by the 413.)"""
+
+    def __init__(self, app: Any, limit: int) -> None:
+        self.app, self.limit = app, limit
+        self._body = json.dumps(
+            {"code": "body_too_large", "message": f"The request body is limited to {limit} bytes."}
+        ).encode()
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        declared = dict(scope["headers"]).get(b"content-length", b"")
+        if declared.isdigit() and int(declared) > self.limit:
+            await self._reject(send)
+            return
+        seen, too_large = 0, False
+
+        async def limited_receive() -> Any:
+            nonlocal seen, too_large
+            if too_large:
+                return {"type": "http.request", "body": b"", "more_body": False}
+            message = await receive()
+            if message["type"] == "http.request":
+                seen += len(message.get("body", b""))
+                if seen > self.limit:
+                    too_large = True
+                    return {"type": "http.request", "body": b"", "more_body": False}
+            return message
+
+        async def replacing_send(message: Any) -> None:
+            if too_large:  # drop the app's own answer; send the 413 once
+                if message["type"] == "http.response.start":
+                    await self._reject(send)
+                return
+            await send(message)
+
+        await self.app(scope, limited_receive, replacing_send)
+
+    async def _reject(self, send: Any) -> None:
+        headers = [
+            (b"content-type", b"application/json"),
+            (b"content-length", str(len(self._body)).encode()),
+        ]
+        await send({"type": "http.response.start", "status": 413, "headers": headers})
+        await send({"type": "http.response.body", "body": self._body})
 
 
 def client_ip(request: Request, trusted_proxy: bool) -> str:
@@ -129,7 +166,7 @@ def create_app(settings: ApiSettings | None = None, services: Services | None = 
             services.queue.start()
             tasks = [
                 asyncio.create_task(
-                    _every(settings.sweep_interval_seconds, services.runner.sweep_stale)
+                    _every(settings.sweep_interval_seconds, lambda: _sweep(services))
                 ),
                 asyncio.create_task(
                     _every(
@@ -157,6 +194,7 @@ def create_app(settings: ApiSettings | None = None, services: Services | None = 
         openapi_url="/openapi.json" if settings.docs_enabled else None,
     )
     install_error_handlers(app)
+    app.add_middleware(BodyLimitMiddleware, limit=settings.max_body_bytes)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=list(settings.frontend_origins),
@@ -170,11 +208,11 @@ def create_app(settings: ApiSettings | None = None, services: Services | None = 
             raise ApiError(503, "not_configured", "The planner is not configured.")
         return services
 
-    @app.get("/health")
+    @app.get("/health", response_model=schemas.Health)
     def health() -> dict[str, str]:
         return {"status": "ok"}
 
-    @app.get("/api/availability")
+    @app.get("/api/availability", response_model=schemas.Availability)
     async def availability() -> dict[str, Any]:
         s = need()
         a = await run_in_threadpool(s.budget.availability)
@@ -187,18 +225,18 @@ def create_app(settings: ApiSettings | None = None, services: Services | None = 
             "sample_run_id": settings.sample_run_id,
         }
 
-    @app.post("/api/runs", status_code=202)
-    async def create_run(request: Request, response: Response) -> dict[str, str]:
+    @app.post(
+        "/api/runs",
+        status_code=202,
+        response_model=schemas.RunAccepted,
+        responses={
+            **{c: {"model": schemas.ErrorBody} for c in (400, 413, 429, 503)},
+            422: {"model": schemas.ValidationErrorBody},
+        },
+    )
+    async def create_run(body: CreateRun, request: Request, response: Response) -> dict[str, str]:
         s = need()
-        # 1. validate
-        payload = await read_json_body(request, settings.max_body_bytes)
-        try:
-            body = CreateRun.model_validate(payload)
-        except ValidationError as exc:
-            raise ApiError(
-                422, "validation_error", "The request is not valid.",
-                fields=validation_fields(exc.errors()),
-            ) from None  # fmt: skip
+        # 1. validate: FastAPI has parsed the body (422 with field messages if it is not valid)
         # 2. is the service open today?
         a = await run_in_threadpool(s.budget.availability)
         if not a.available:
@@ -226,19 +264,31 @@ def create_app(settings: ApiSettings | None = None, services: Services | None = 
             "events_url": f"/api/runs/{run_id}/events",
         }
 
-    @app.get("/api/runs/{run_id}")
+    @app.get(
+        "/api/runs/{run_id}",
+        response_model=schemas.RunView,
+        responses={404: {"model": schemas.ErrorBody}},
+    )
     async def get_run(run_id: str) -> dict[str, Any]:
         s = need()
         run, _ = await _load(s, run_id)
         return run_view(run)
 
-    @app.get("/api/runs/{run_id}/steps")
+    @app.get(
+        "/api/runs/{run_id}/steps",
+        response_model=schemas.StepsView,
+        responses={404: {"model": schemas.ErrorBody}},
+    )
     async def get_steps(run_id: str) -> dict[str, Any]:
         s = need()
         _, steps = await _load(s, run_id)
         return {"run_id": run_id, "steps": [step_view(x) for x in steps]}
 
-    @app.get("/api/runs/{run_id}/events")
+    @app.get(
+        "/api/runs/{run_id}/events",
+        response_class=StreamingResponse,
+        responses={200: {"content": {"text/event-stream": {}}}, 404: {"model": schemas.ErrorBody}},
+    )
     async def events(run_id: str, request: Request, after: int | None = None) -> StreamingResponse:
         s = need()
         run_id = _uuid_or_404(run_id)
@@ -322,12 +372,39 @@ def create_app(settings: ApiSettings | None = None, services: Services | None = 
         except KeyError:
             raise ApiError(404, "not_found", "No such run.") from None
 
+    dist = settings.frontend_dist
+    if dist is not None and (dist / "index.html").is_file():
+        root = dist.resolve()
+
+        @app.get("/{path:path}", include_in_schema=False)
+        async def frontend(path: str) -> FileResponse:
+            """The single-page app: a file from the build if there is one, otherwise index.html
+            so client-side routes (/runs/<id>) survive a reload. Never for /api."""
+            if path == "api" or path.startswith("api/"):
+                raise ApiError(404, "not_found", "Not found.")
+            target = (root / path).resolve()
+            if path and target.is_file() and root in target.parents:
+                immutable = path.startswith("assets/")  # hashed file names
+                cache = "public, max-age=31536000, immutable" if immutable else "no-cache"
+                return FileResponse(target, headers={"Cache-Control": cache})
+            return FileResponse(root / "index.html", headers={"Cache-Control": "no-cache"})
+
     return app
+
+
+def _sweep(s: Services) -> None:
+    """Close runs that will never finish: running ones that stopped writing, and queued ones that
+    this process does not hold (it restarted) or that waited too long."""
+    s.runner.sweep_stale()
+    s.runner.sweep_queued(lambda run_id: s.queue.position(run_id) is not None)
 
 
 def _work(s: Services, run_id: str) -> None:
     """One worker's job: run the plan (the budget was reserved when the request was accepted)."""
     try:
+        if s.runner.store.get_run(run_id).status != "queued":
+            s.budget.release(run_id)  # swept while it waited: do not start it
+            return
         s.runner.run_plan(run_id, already_reserved=True)
     except Exception:
         log.exception("run %s crashed", run_id)

@@ -58,6 +58,10 @@ class RunStore(Protocol):
         """Remove a run that never started (a request refused after its row was written)."""
         ...
 
+    def queued_runs(self) -> list[tuple[str, datetime]]:
+        """(id, created_at) of every run still queued."""
+        ...
+
 
 def _now() -> datetime:
     return datetime.now(UTC)
@@ -137,6 +141,9 @@ class InMemoryRunStore:
     def delete_run(self, run_id: str) -> None:
         self.runs.pop(run_id, None)
         self.steps.pop(run_id, None)
+
+    def queued_runs(self) -> list[tuple[str, datetime]]:
+        return [(r.id, r.created_at) for r in self.runs.values() if r.status == "queued"]
 
 
 class PostgresRunStore:
@@ -245,3 +252,10 @@ class PostgresRunStore:
     def delete_run(self, run_id: str) -> None:
         with self._pool.connection() as conn:  # run_steps cascade
             conn.execute("DELETE FROM runs WHERE id = %s", (run_id,))
+
+    def queued_runs(self) -> list[tuple[str, datetime]]:
+        with self._pool.connection() as conn:
+            rows = conn.execute(
+                "SELECT id, created_at FROM runs WHERE status = 'queued'"
+            ).fetchall()
+        return [(str(r["id"]), r["created_at"]) for r in rows]

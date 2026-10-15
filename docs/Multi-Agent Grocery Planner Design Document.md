@@ -278,6 +278,13 @@ On a reconnect, the client reloads the run's stored state and then resumes strea
 
 **Trace panel:** a simple "how it worked" panel on the result page shows each agent's inputs, outputs, tool calls, tokens and latency, read from `run_steps`.
 
+**Built (step 13).** One React 19 app, Vite, strict TypeScript, Tailwind 4, react-router, with three routes: `/` (the form), `/runs/:id` (progress while running, the result when done) and a not-found page. It is served by FastAPI from `frontend/dist` on the same origin as `/api` (index.html for unknown non-API paths), so there is no CORS and the HttpOnly visitor cookie works; in development Vite proxies `/api` to :8000. The API types are generated from the OpenAPI schema and CI fails if they are stale.
+
+- **Form:** repeatable meal cards (name, mains and sides lists, people, days, avoid with a note not to enter anything personal), a pantry staples toggle and a collapsed Advanced settings panel showing each default and range. Client-side validation mirrors the API caps (7 meals, 4 mains and 4 sides per meal, 20 dishes in total, text lengths); server 422 field errors are mapped onto the same inputs. A closed day shows a simple notice with the reset time and a link to the sample run; a busy or limit refusal shows the API's own message (limits add when they reset).
+- **Progress:** the three agents in order with the current one highlighted, the queue position, and the loop-back rows when the planner sends items back. It is driven by the event stream: a fresh page load replays from event 0, which rebuilds the view, and our own reconnects use `?after=<last seq>`. An `aria-live` region announces each change.
+- **Result:** the recommendation first (verdict in plain words, the code summary line, the condition "if you shop by Tue 20 Oct ... after that ...", confidence, saving, reasoning), then the per-store comparison (pack, cost, tier and flags per pick, totals on common items, excluded items listed), the consolidated shopping list by category with the meals that use each item, tips, flags and assumptions, and a footer (seeded-data notice, requests, latency, model, would-be cost, copy link, "anyone with this link can view this run"). A stopped or failed run shows the message, the ingredient list if there is one and which items failed and why.
+- **Design:** mobile first; one accent colour; the comparison reads like a receipt (dashed rules, tabular figures). Labels on every input, keyboard navigable, visible focus, reduced-motion respected.
+
 ## API
 
 FastAPI, JSON in and out, errors as `{code, message}` (validation errors add `fields`; `unavailable` adds the reset times). No stack trace ever leaves the server.

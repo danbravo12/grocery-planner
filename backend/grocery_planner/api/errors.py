@@ -45,6 +45,9 @@ def install_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(RequestValidationError)
     async def _validation(_: Request, exc: RequestValidationError) -> JSONResponse:
+        if any(e.get("type") == "json_invalid" for e in exc.errors()):
+            body = {"code": "invalid_json", "message": "The request body must be valid JSON."}
+            return JSONResponse(body, status_code=400)
         fields = validation_fields(list(exc.errors()))
         body = {
             "code": "validation_error",

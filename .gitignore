@@ -18,3 +18,8 @@ backend/evals/results/*
 
 # editor swap files
 *.swp
+
+# frontend
+frontend/playwright-report/
+frontend/test-results/
+frontend/dist/
