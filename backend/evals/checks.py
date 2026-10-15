@@ -498,7 +498,41 @@ def _e2e_min_items(s: E2ESubject, params: int) -> list[Outcome]:
 def _e2e_status(s: E2ESubject, params: Any) -> list[Outcome]:
     r = s.run
     why = r.failure_reason or r.stop_reason
-    return [_o("status", r.status == params, f"status {r.status}" + (f" ({why})" if why else ""))]
+    return [
+        _o(
+            "status",
+            r.status in _as_list(params),
+            f"status {r.status}" + (f" ({why})" if why else "") + f", want {params}",
+        )
+    ]
+
+
+def _e2e_swaps_disclosed(s: E2ESubject, params: list[str]) -> list[Outcome]:
+    """A food the shopper asked for that is not on the list must be named in the assumptions
+    (the agent swapped it for something else, and said so)."""
+    out = s.run.ingredient_output or {}
+    items = " | ".join(i["name"].lower() for i in out.get("items", []))
+    notes = " ".join(out.get("assumptions", [])).lower()
+    result = []
+    for food in params:
+        if food.lower() in items:
+            result.append(_o("swaps_disclosed", True, f"{food}: on the list"))
+        else:
+            said = food.lower() in notes
+            result.append(
+                _o(
+                    "swaps_disclosed",
+                    said,
+                    f"{food}: swapped out, "
+                    + ("named in the assumptions" if said else "not mentioned"),
+                )
+            )
+    return result
+
+
+def _e2e_if_stopped_clean(s: E2ESubject, params: Any) -> list[Outcome]:
+    """Only a stopped run is held to the clean-stop rules; a completed one is not."""
+    return _e2e_stopped_cleanly(s, params) if s.run.status == "stopped" else []
 
 
 def _e2e_stop_reason(s: E2ESubject, params: Any) -> list[Outcome]:
@@ -583,6 +617,8 @@ CHECKS: dict[str, dict[str, CheckFn]] = {
         "status": _e2e_status,
         "stop_reason": _e2e_stop_reason,
         "stopped_cleanly": _e2e_stopped_cleanly,
+        "swaps_disclosed": _e2e_swaps_disclosed,
+        "if_stopped_clean": _e2e_if_stopped_clean,
     },
 }
 IMPLICIT = {

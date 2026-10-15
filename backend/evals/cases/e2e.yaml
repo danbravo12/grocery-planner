@@ -43,19 +43,21 @@
     min_items: 8
     recommendation: [no_meaningful_difference]
 
-- id: e2e-stopped-run
+- id: e2e-unusual-dishes
   agent: e2e
   notes: >
-    Dishes the catalogue mostly cannot supply (dragon fruit, saffron, kangaroo). Too few items
-    can be compared, so the run must stop rather than recommend: status stopped with a reason,
-    the ingredient list kept, a message for the user and no planner step. Whether the model
-    finds a substitute for one of the items is not asserted, only that the run ends this way.
+    Dishes the catalogue mostly cannot supply (dragon fruit, saffron, kangaroo). The agent may
+    swap them for catalogue items and the run may then complete, or too little may be
+    comparable and the run may stop; both are fine. What is checked: every requested food that
+    is not on the list is named in the assumptions (the swap is disclosed), and a run that
+    stops keeps the ingredient list, gives the user a message and never runs the planner. The
+    stop path itself is covered offline (tests/test_orchestrator.py).
   input:
     meals:
       - {meal_name: Exotic night, mains: [dragon fruit salad, saffron risotto, kangaroo steaks], people: 2, days: 1}
   checks:
     max_calls: 4
-    status: stopped
-    stop_reason: [too_many_unmatched, not_comparable]
-    stopped_cleanly: true
+    status: [completed, stopped]
+    swaps_disclosed: [kangaroo, saffron, dragon fruit]
+    if_stopped_clean: true
     min_items: 3

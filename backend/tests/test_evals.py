@@ -583,8 +583,8 @@ def stopped_run_script():
     return ingredients, prices
 
 
-def test_stopped_run_case_passes_when_the_run_stops_and_fails_when_it_does_not():
-    case = BY_ID["e2e-stopped-run"]
+def test_unusual_dishes_case_passes_a_clean_stop():
+    case = BY_ID["e2e-unusual-dishes"]
     ingredients, prices = stopped_run_script()
     fake = FakeLLMClient([ingredients, prices])
     r = run_case(case, lambda meter, hooks: _hooked(fake, meter), 1)
@@ -592,7 +592,7 @@ def test_stopped_run_case_passes_when_the_run_stops_and_fails_when_it_does_not()
     names = {o["name"] for o in r.outcomes}
     assert {
         "status",
-        "stop_reason",
+        "swaps_disclosed",
         "ingredient_list_kept",
         "user_message",
         "planner_not_run",
@@ -600,13 +600,83 @@ def test_stopped_run_case_passes_when_the_run_stops_and_fails_when_it_does_not()
     assert fake.script == [] and len(fake.calls) == 2  # the planner was never asked
 
 
-def test_stopped_run_input_is_a_valid_request_and_mostly_outside_the_catalogue():
+def e2e_subject(status="completed", items=(), assumptions=(), user_message=None, steps=()):
+    from grocery_planner.orchestrator.models import StepRecord
+
+    now = datetime.now(UTC)
+    run = RunRecord(
+        id="r", status=status, created_at=now, updated_at=now, user_message=user_message,
+        ingredient_output={"items": [{"name": n} for n in items], "assumptions": list(assumptions)},
+        planner_output=None if status == "stopped" else {"recommendation": "one_store"},
+    )  # fmt: skip
+    steps = [StepRecord(seq=1, name=n, started_at=now) for n in steps]
+    request = PlanRequest.model_validate(
+        {"meals": [{"meal_name": "M", "mains": ["x"], "people": 1, "days": 1}]}
+    )
+    return E2ESubject(request, run, steps)
+
+
+def unusual_checks():
+    return {"status": ["completed", "stopped"], "swaps_disclosed": ["kangaroo", "saffron"],
+            "if_stopped_clean": True, "max_calls": 4}  # fmt: skip
+
+
+def evaluate_unusual(subject):
+    from evals.execute import Execution
+
+    case = BY_ID["e2e-unusual-dishes"].model_copy(update={"checks": unusual_checks()})
+    return {o.name: o for o in evaluate(case, Execution(subject), Meter(calls=2))}
+
+
+def test_unusual_dishes_a_completed_run_must_disclose_what_it_swapped():
+    ok = evaluate_unusual(
+        e2e_subject(
+            items=["beef mince"], assumptions=["Kangaroo swapped for beef.", "Saffron left out."]
+        )
+    )
+    assert all(o.passed for o in ok.values())
+    silent = evaluate_unusual(
+        e2e_subject(items=["beef mince"], assumptions=["Kangaroo swapped for beef."])
+    )
+    assert not silent["swaps_disclosed"].passed and "saffron" in silent["swaps_disclosed"].detail
+    on_list = evaluate_unusual(e2e_subject(items=["Saffron", "kangaroo meat"], assumptions=[]))
+    assert on_list["swaps_disclosed"].passed  # present as items, nothing to disclose
+    # a completed run is not held to the stop rules
+    assert "planner_not_run" not in ok
+
+
+def test_unusual_dishes_a_stopped_run_needs_list_message_and_no_planner():
+    clean = evaluate_unusual(
+        e2e_subject("stopped", items=["saffron", "kangaroo"], user_message="Too little to compare.",
+                    steps=["ingredient", "price", "stop"])
+    )  # fmt: skip
+    assert all(o.passed for o in clean.values()), [o for o in clean.values() if not o.passed]
+    bad = evaluate_unusual(e2e_subject("stopped", items=["saffron", "kangaroo"], steps=["planner"]))
+    failed = {name for name, o in bad.items() if not o.passed}
+    assert {"user_message", "planner_not_run", "stop_step_recorded"} <= failed
+    failed_run = evaluate_unusual(e2e_subject("failed", items=["saffron", "kangaroo"]))
+    assert not failed_run["status"].passed  # neither completed nor stopped
+
+
+def test_unusual_dishes_input_is_a_valid_request_and_mostly_outside_the_catalogue():
     from grocery_planner.tools.vocabulary import ingredient_vocabulary
 
-    case = BY_ID["e2e-stopped-run"]
-    dishes = case.input["meals"][0]["mains"]
-    assert dishes == ["dragon fruit salad", "saffron risotto", "kangaroo steaks"]
+    case = BY_ID["e2e-unusual-dishes"]
+    assert case.input["meals"][0]["mains"] == [
+        "dragon fruit salad", "saffron risotto", "kangaroo steaks",
+    ]  # fmt: skip
     vocab = ingredient_vocabulary()
     for word in ("dragon fruit", "saffron", "kangaroo"):
         assert not any(word in name for name in vocab)
-    assert case.checks["status"] == "stopped" and case.checks["stopped_cleanly"] is True
+    assert case.checks["status"] == ["completed", "stopped"]
+
+
+def test_the_baseline_file_is_approved_and_matches_the_floors():
+    import json
+
+    from evals.report import BASELINE_PATH
+
+    b = json.loads(BASELINE_PATH.read_text())
+    assert b["status"] == "approved" and b["approved_by"] == "Daniel"
+    assert set(b["pass_rates"]) == {"ingredient", "price", "planner", "e2e"}
+    assert {k: v for k, v in b["floors"].items()} == FLOORS

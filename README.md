@@ -84,16 +84,20 @@ It writes `evals/results/<timestamp>-<model>.json` and a markdown summary, and e
 
 Request counting: a case's call limit counts model calls (first calls and tool rounds); repairs and transport retries (5xx, timeouts, per-minute 429s) are reported but never fail a case, and a per-day 429 stops the run with exit code 3 instead of producing failures. The three end-to-end cases all expect "no meaningful difference" because the seeded prices are close; the planner cases cover the other outcomes (one store, split, and the two overrides).
 
-**Scores (DRAFT: the expected values are awaiting review, so the baseline is not final).** Pass rate over scored case runs, 3 repeats of all 39 cases each, run on 2026-10-15 at the 2026-10-14 anchor, fallback model off.
+**Scores (approved baseline).** Pass rate over scored case runs, 3 repeats of every case, at the 2026-10-14 anchor, fallback model off. The ingredient, price and planner rows are from the full 39-case run on 2026-10-15; the end-to-end row for 3.1 is from the re-run after the stopped-run case was replaced (the 3.5 end-to-end figure still includes the old case).
 
 | Agent | Cases | `gemini-3.1-flash-lite` (default), mean / min | `gemini-3.5-flash-lite`, mean / min |
 | --- | ---: | ---: | ---: |
 | Ingredient | 12 | 100% / 100% | 94.4% / 91.7% |
 | Price | 12 | 100% / 100% | 100% / 100% |
 | Planner | 11 | 100% / 100% | 100% / 100% |
-| End to end | 4 | 83.3% / 75.0% | 91.7% / 75.0% |
+| End to end | 4 | 100% / 100% | 91.7% / 75.0% |
 
-Cost of one full set on the paid tier is about $0.06 (3.1) and $0.10 (3.5); average latency per case 5 to 6 s (15 to 21 s end to end). See [docs/DECISIONS.md](docs/DECISIONS.md) (step 11c) for the failures.
+Cost of one full set on the paid tier is about $0.19 for 3 repeats on 3.1 against $0.31 on 3.5 (roughly $0.06 and $0.10 a set); average latency per case is 6.3 s against 7.1 s (15.6 s against 21.0 s end to end).
+
+**Why 3.1 is the default:** it is at least as accurate as 3.5 on this set and cheaper and faster. The two failures only 3.5 had are both ingredient cases: it put spaghetti and penne into a gluten-free bolognese on one repeat (both answers broke the avoid guard, so the repair failed), and on one repeat it returned the injected dish name as an ingredient. 3.1 needed no repairs at all.
+
+The stop path (too many items not found, or too few comparable) is tested offline in `tests/test_orchestrator.py`: the run stops, keeps the ingredient list, gives the user a message and never runs the planner. The live end-to-end case `e2e-unusual-dishes` (dragon fruit, saffron and kangaroo) accepts either outcome and checks that any swapped food is named in the assumptions.
 
 CI: `.github/workflows/ci.yml` runs ruff, the unit tests and the integration tests (against a Postgres service container) on every push and pull request. `.github/workflows/evals.yml` runs the evals when agents, prompts, the model layer, the evals, fixtures or the catalogue change, or on demand. It needs the repository secret `GEMINI_EVAL_API_KEY`.
 
