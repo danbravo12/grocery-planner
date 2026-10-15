@@ -84,16 +84,16 @@ It writes `evals/results/<timestamp>-<model>.json` and a markdown summary, and e
 
 Request counting: a case's call limit counts model calls (first calls and tool rounds); repairs and transport retries (5xx, timeouts, per-minute 429s) are reported but never fail a case, and a per-day 429 stops the run with exit code 3 instead of producing failures. The three end-to-end cases all expect "no meaningful difference" because the seeded prices are close; the planner cases cover the other outcomes (one store, split, and the two overrides).
 
-**Scores (DRAFT: the expected values are awaiting review, so the baseline is not final).** Pass rate = cases passed over case runs.
+**Scores (DRAFT: the expected values are awaiting review, so the baseline is not final).** Pass rate over scored case runs, 3 repeats of all 39 cases each, run on 2026-10-15 at the 2026-10-14 anchor, fallback model off.
 
-| Agent | Cases | `gemini-3.1-flash-lite` (default), 1 run | `gemini-3.5-flash-lite`, 3 runs (mean / min) |
+| Agent | Cases | `gemini-3.1-flash-lite` (default), mean / min | `gemini-3.5-flash-lite`, mean / min |
 | --- | ---: | ---: | ---: |
-| Ingredient | 12 | 9/12 (75.0%) | 83.3% / 83.3% |
-| Price | 12 | 12/12 (100%) | 94.4% / 91.7% |
-| Planner | 10 | 10/10 (100%) | 100% / 100% |
-| End to end | 3 | 3/3 (100%) | 100% / 100% |
+| Ingredient | 12 | 100% / 100% | 94.4% / 91.7% |
+| Price | 12 | 100% / 100% | 100% / 100% |
+| Planner | 11 | 100% / 100% | 100% / 100% |
+| End to end | 4 | 83.3% / 75.0% | 91.7% / 75.0% |
 
-The 3.1 column is one run made before Google's API degraded (a later 3 repeat run of 3.1 was swamped by 503 errors and then the eval key's daily quota, so it says nothing about the model). One of the three ingredient misses was a wrong expectation that has since been corrected. See [docs/DECISIONS.md](docs/DECISIONS.md) (step 11) for details.
+Cost of one full set on the paid tier is about $0.06 (3.1) and $0.10 (3.5); average latency per case 5 to 6 s (15 to 21 s end to end). See [docs/DECISIONS.md](docs/DECISIONS.md) (step 11c) for the failures.
 
 CI: `.github/workflows/ci.yml` runs ruff, the unit tests and the integration tests (against a Postgres service container) on every push and pull request. `.github/workflows/evals.yml` runs the evals when agents, prompts, the model layer, the evals, fixtures or the catalogue change, or on demand. It needs the repository secret `GEMINI_EVAL_API_KEY`.
 
