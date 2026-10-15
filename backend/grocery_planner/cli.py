@@ -59,7 +59,7 @@ def build_runner(args: argparse.Namespace, as_of: date) -> Runner:
             llm_factory,
             InMemoryDishCache(),
             SeededFilePriceSource(anchor=as_of),
-            budget=InMemoryDayBudget(primary, fallback),
+            budget=InMemoryDayBudget(primary, fallback, ip_secret=getattr(args, "ip_secret", None)),
             tracer=tracer,
             primary_model=primary,
         )
@@ -79,7 +79,9 @@ def build_runner(args: argparse.Namespace, as_of: date) -> Runner:
         llm_factory,
         PostgresDishCache(url),
         PostgresPriceSource(url),
-        budget=PostgresDayBudget(url, primary, fallback),
+        budget=PostgresDayBudget(
+            url, primary, fallback, ip_secret=getattr(args, "ip_secret", None)
+        ),
         tracer=tracer,
         primary_model=primary,
     )

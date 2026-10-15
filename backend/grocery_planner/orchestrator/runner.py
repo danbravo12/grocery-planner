@@ -289,8 +289,10 @@ class Runner:
 
     # ---- the run ------------------------------------------------------------------------
 
-    def run_plan(self, run_id: str) -> RunRecord:
-        """Run the whole plan synchronously and return the final run row."""
+    def run_plan(self, run_id: str, already_reserved: bool = False) -> RunRecord:
+        """Run the whole plan synchronously and return the final run row. `already_reserved`:
+        the caller (the API) reserved the budget when it accepted the request, so the run does
+        not reserve again; it still releases whatever it did not use when it ends."""
         run = self.store.get_run(run_id)
         request = PlanRequest.model_validate(run.input)
         params = run.parameters
@@ -302,7 +304,8 @@ class Runner:
         ctx = RunCtx(run_id, deadline, CountingSource(self.source))
         self.store.update_run(run_id, status="running")
         try:
-            self.budget.reserve(run_id, run.estimated_requests)
+            if not already_reserved:
+                self.budget.reserve(run_id, run.estimated_requests)
         except BudgetUnavailable as exc:  # not admitted: the run never starts
             self._fail(ctx, exc)
             return self.store.get_run(run_id)

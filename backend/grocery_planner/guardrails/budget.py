@@ -16,7 +16,7 @@ import secrets
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any, Literal
 
 from grocery_planner.config import GUARDRAILS, GuardrailConfig
@@ -107,6 +107,10 @@ class _Common:
         if row.used >= self.cfg.daily_limit:
             raise BudgetExhausted(model)
 
+    def prune(self, keep_days: int = 7, now: datetime | None = None) -> int:  # pragma: no cover
+        """Delete counters older than `keep_days` Pacific days; returns how many rows went."""
+        raise NotImplementedError
+
     def fallback_allowed(self) -> bool:
         if self.fallback is None:
             return False
@@ -188,6 +192,17 @@ class InMemoryDayBudget(_Common):
             with self._lock:
                 row = self._row(self._today(), model)
                 row["stopped"], row["reason"] = True, STOP_GOOGLE_QUOTA
+
+    def prune(self, keep_days: int = 7, now: datetime | None = None) -> int:
+        cutoff = self._today(now) - timedelta(days=keep_days)
+        with self._lock:
+            old_rows = [k for k in self._rows if k[0] < cutoff]
+            old_counters = [k for k in self.counters if k[0] < cutoff]
+            for k in old_rows:
+                del self._rows[k]
+            for k in old_counters:
+                del self.counters[k]
+        return len(old_rows) + len(old_counters)
 
     def admit(self, visitor_id: str, ip: str, now: datetime | None = None) -> AdmitResult:
         day = self._today(now)
@@ -351,6 +366,12 @@ class PostgresDayBudget(_Common):
         with self._pool.connection() as conn:
             conn.execute(_ENSURE_ROW, (day, model))
             conn.execute(_STOP_ROW, (STOP_GOOGLE_QUOTA, day, model))
+
+    def prune(self, keep_days: int = 7, now: datetime | None = None) -> int:
+        cutoff = self._today(now) - timedelta(days=keep_days)
+        with self._pool.connection() as conn:
+            cur = conn.execute("DELETE FROM usage_counters WHERE day < %s", (cutoff,))
+            return cur.rowcount
 
     def admit(self, visitor_id: str, ip: str, now: datetime | None = None) -> AdmitResult:
         day = self._today(now)

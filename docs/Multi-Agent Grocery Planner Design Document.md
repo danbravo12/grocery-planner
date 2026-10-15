@@ -278,6 +278,29 @@ On a reconnect, the client reloads the run's stored state and then resumes strea
 
 **Trace panel:** a simple "how it worked" panel on the result page shows each agent's inputs, outputs, tool calls, tokens and latency, read from `run_steps`.
 
+## API
+
+FastAPI, JSON in and out, errors as `{code, message}` (validation errors add `fields`; `unavailable` adds the reset times). No stack trace ever leaves the server.
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /health` | Liveness |
+| `GET /api/availability` | `{available, reason, reset_at_utc, reset_at_sydney, sample_run_id}` for the form and the "unavailable today" screen |
+| `POST /api/runs` | Body: the meal form plus optional `parameters` (the advanced settings). 202 `{run_id, run_url, events_url}` |
+| `GET /api/runs/{id}` | The public run view: request, parameters used, status, ingredient list, per-store comparison, recommendation (with the verdict's condition), flags, assumptions, totals, models and would-be cost. 404 for an unknown id |
+| `GET /api/runs/{id}/steps` | Public step records for the trace panel: summaries, tool calls, tokens, latency, model, fallback, the error class name only |
+| `GET /api/runs/{id}/events` | Server-sent events (below) |
+
+**Order of checks on `POST /api/runs`:** validate the body (422, 400 for bad JSON, 413 over 32 KB) → is the service open today (503 `unavailable`) → is there room in the queue (503 `busy`) → reserve the run's worst-case budget (503 `busy` or `day_budget`) → admit the visitor and IP (429 `visitor_limit` or `ip_limit`, and the reservation is released) → queue the run (503 `busy` if the queue filled in the meantime, reservation released) → 202. A refusal before admit never touches the visitor's count. The run row is written before the reservation because the budget records the reservation against it; a refused request deletes the row again.
+
+**Queue:** a worker pool of 2 concurrent runs (configurable) behind a FIFO of at most 10; the 13th concurrent request is refused. Runs are plain background threads, so a closed tab or dropped connection changes nothing. The queue is in one process and is lost on a restart: a queued run that never started is left as queued (known limitation).
+
+**Events:** `step_started`, `step_completed`, `loopback`, `run_completed`, `run_failed` (also a stopped run, `data.status` says which), each with `id` = its sequence number, replayed from `Last-Event-ID` or `?after=` and then followed live. While a run waits for a worker the stream sends `queued {position}` (no id, so a reconnect is unaffected). A comment heartbeat goes out every 15 s, and the stream closes after the terminal event. `unavailable` is not a stream event: the form reads `/api/availability`.
+
+**Visitor and address:** a random visitor id in an HttpOnly, SameSite=Lax cookie (Secure in prod, one year). The client IP is the socket address, or with `TRUSTED_PROXY=true` the last `X-Forwarded-For` entry, which is the one our own proxy added. Visitor ids and IP hashes are used for the per-day counters only and appear in no response or run record.
+
+**Startup and hardening:** stale runs are swept at startup and every 5 minutes, and usage counters older than 7 days are pruned daily. With `APP_ENV=prod` the API refuses to start without `IP_HASH_SECRET` and `SAMPLE_RUN_ID`. CORS allows only the origins in `FRONTEND_ORIGINS`, and `/docs` and `/openapi.json` exist only with `APP_ENV=dev`.
+
 ## Configuration parameters
 
 Every parameter has a default and a clamped range, and the values used are stored with each run.

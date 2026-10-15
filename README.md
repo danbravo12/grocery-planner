@@ -2,7 +2,7 @@
 
 A multi-agent grocery planner: meals in, shopping list, supermarket prices, and a where-to-shop recommendation out. Full design: [docs/Multi-Agent Grocery Planner Design Document.md](docs/Multi-Agent%20Grocery%20Planner%20Design%20Document.md). Choices the design doc left open are logged in [docs/DECISIONS.md](docs/DECISIONS.md).
 
-**Status: step 11 of the build plan.** Backend complete up to evals and CI: ingredient, price and planner agents, orchestrator, guardrails, tracing, 37 eval cases and GitHub Actions. There are no API endpoints (beyond `GET /health`) or frontend yet.
+**Status: step 12 of the build plan.** Backend complete: ingredient, price and planner agents, orchestrator, guardrails, tracing, evals, GitHub Actions and the HTTP API (create a run, read it, follow it over SSE). There is no frontend yet.
 
 ## Layout
 
@@ -52,6 +52,34 @@ uv run python -m grocery_planner.cli run examples/request_1.json            # st
 uv run python -m grocery_planner.cli run examples/request_2.json --memory   # no database
 ```
 The CLI refuses to start (exit code 3) when the day's AI budget is used up, and prints the per-model counters after every run. Options: `--as-of YYYY-MM-DD` (default today, Sydney), `--bypass-cache` (skip the dish cache), `--seed` (refresh the Postgres catalogue first), `--memory` (in-process store and the seed file). Exit code 0 completed, 1 stopped (too little to compare), 2 failed, 3 unavailable today. A request file is a plan request plus optional `parameters` (savings and stop thresholds).
+
+## Run the API locally
+
+```bash
+cd backend
+uv run uvicorn grocery_planner.main:app --port 8000          # Postgres, real Gemini (backend/.env)
+API_STORE=memory uv run uvicorn grocery_planner.main:app     # no database, seed file prices
+```
+
+Interactive docs are at `/docs` when `APP_ENV=dev` (hidden otherwise). A plan, end to end:
+
+```bash
+curl -si -c jar -X POST localhost:8000/api/runs -H 'content-type: application/json' \
+     --data @examples/request_1.json            # 202 {run_id, run_url, events_url}
+curl -N localhost:8000/api/runs/<run_id>/events # server-sent events until run_completed
+curl localhost:8000/api/runs/<run_id>           # the finished run
+```
+
+| Endpoint | Purpose | Status codes |
+| --- | --- | --- |
+| `GET /health` | liveness | 200 |
+| `GET /api/availability` | open today? reset time, sample run id | 200 |
+| `POST /api/runs` | start a plan (body: the meal form plus optional `parameters`) | 202; 400 bad JSON; 413 body over 32 KB; 422 field messages; 429 `visitor_limit` / `ip_limit`; 503 `unavailable` / `day_budget` / `busy` |
+| `GET /api/runs/{id}` | public run view | 200; 404 |
+| `GET /api/runs/{id}/steps` | step records for the "how it worked" panel | 200; 404 |
+| `GET /api/runs/{id}/events` | SSE: replays from `Last-Event-ID` (or `?after=`), then live; heartbeat comment every 15 s; closes after `run_completed` or `run_failed` (a stopped run too); `queued` while waiting | 200; 404 |
+
+Errors are `{code, message}`. Settings (see `.env.example`): `FRONTEND_ORIGINS` (CORS), `TRUSTED_PROXY`, `IP_HASH_SECRET` and `SAMPLE_RUN_ID` (both required with `APP_ENV=prod`, or the API will not start), `API_STORE=memory`. At most 2 plans run at once with up to 10 waiting; a 13th request gets 503 `busy`. The queue is in one process, like the per-minute limiter.
 
 ## Database: migrate, seed, integration tests
 

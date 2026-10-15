@@ -43,6 +43,8 @@ def test_unknown_store_rejected():
 def test_health():
     from fastapi.testclient import TestClient
 
-    from grocery_planner.main import app
+    from grocery_planner.api import create_app
+
+    app = create_app()
 
     assert TestClient(app).get("/health").json() == {"status": "ok"}

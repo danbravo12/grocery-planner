@@ -54,6 +54,10 @@ class RunStore(Protocol):
 
     def running_not_updated_since(self, cutoff: datetime) -> list[str]: ...
 
+    def delete_run(self, run_id: str) -> None:
+        """Remove a run that never started (a request refused after its row was written)."""
+        ...
+
 
 def _now() -> datetime:
     return datetime.now(UTC)
@@ -129,6 +133,10 @@ class InMemoryRunStore:
 
     def running_not_updated_since(self, cutoff: datetime) -> list[str]:
         return [r.id for r in self.runs.values() if r.status == "running" and r.updated_at < cutoff]
+
+    def delete_run(self, run_id: str) -> None:
+        self.runs.pop(run_id, None)
+        self.steps.pop(run_id, None)
 
 
 class PostgresRunStore:
@@ -233,3 +241,7 @@ class PostgresRunStore:
                 "SELECT id FROM runs WHERE status = 'running' AND updated_at < %s", (cutoff,)
             ).fetchall()
         return [str(r["id"]) for r in rows]
+
+    def delete_run(self, run_id: str) -> None:
+        with self._pool.connection() as conn:  # run_steps cascade
+            conn.execute("DELETE FROM runs WHERE id = %s", (run_id,))
