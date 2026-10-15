@@ -1,4 +1,5 @@
 import json
+from datetime import date
 from decimal import Decimal as D
 
 import pytest
@@ -27,11 +28,12 @@ from grocery_planner.llm import (
     SchemaValidationFailed,
     ToolLoopExceeded,
 )
+from grocery_planner.tools.planner_math import rule_verdict
 from tests.fixtures import (
     doubtful_match_scenario,
     large_gap_scenario,
     load_price_fixture,
-    special_tomorrow_scenario,
+    special_scenario,
     split_scenario,
     with_total,
 )
@@ -71,7 +73,7 @@ def item_id_named(fixture, name):
 def test_fixtures_load_without_an_api_call():
     for name in "abc":
         f = load_price_fixture(name)
-        assert f.as_of.isoformat() == "2026-10-12" and f.captured_with_model.startswith("gemini")
+        assert f.as_of.isoformat() == "2026-10-14" and f.captured_with_model.startswith("gemini")
         assert len(f.items) % 2 == 0 and f.items[0].store == COLES
 
 
@@ -157,44 +159,92 @@ def test_confidence_high_needs_gap_items_to_stay_within_half_the_savings():
     assert confidence_of(build(5, 5)) == "high"  # exactly half is not "more than half"
 
 
-def test_special_dependence_is_flagged_only_when_the_result_needs_it():
-    def build(coles_chicken):
-        chicken = [
-            with_total(
-                priced("chicken", COLES, "chicken breast", "col-chicken-breast-01"), coles_chicken
-            ),
-            with_total(priced("chicken", WOOL, "chicken breast", "wol-chicken-breast-01"), "20.00"),
-        ]  # fmt: skip
-        milk = [
-            priced("milk", COLES, "milk", "col-milk-01"),
-            priced("milk", WOOL, "milk", "wol-milk-01"),
-        ]
-        return build_facts(chicken + milk, BOTH, CFG, AS_OF)
-
-    dependent = build("30.00")  # gap 10.10, of which the special accounts for 10.00
-    assert dependent.verdict.kind == "one_store" and dependent.special_dependent == ["chicken"]
-    flag = next(f for f in dependent.flags if f.kind == "special_dependency")
-    assert (
-        flag.store == WOOL and flag.ends_in_days == 3 and flag.ends_on.isoformat() == "2026-10-15"
+def on_special(row, special, regular, ends):
+    """A copy of a row bought on special: `special` now, `regular` once it ends."""
+    return with_total(row, special).model_copy(
+        update={
+            "on_special": True,
+            "special_end_date": ends,
+            "regular_price": D(regular) / row.packs_needed,
+            "regular_total_cost": D(regular),
+        }
     )
-    assert "until 2026-10-15" in flag.message
-    robust = build(
-        "45.00"
-    )  # gap 25.10: still wins without the special's 25.00? no: 25.10-25.00 < 8
-    assert robust.special_dependent == ["chicken"]
-    plus = build_facts(
-        [*[with_total(r, r.total_cost + D(30)) if r.store == COLES else r
-           for r in [priced("beef", COLES, "beef mince", "col-beef-mince-01"),
-                     priced("beef", WOOL, "beef mince", "wol-beef-mince-01")]],
-         *[with_total(priced("chicken", COLES, "chicken breast", "col-chicken-breast-01"), "14.00"),
-           priced("chicken", WOOL, "chicken breast", "wol-chicken-breast-01")]],
-        BOTH, CFG, AS_OF,
-    )  # fmt: skip
-    assert plus.verdict.kind == "one_store" and plus.special_dependent == []  # wins on beef anyway
 
 
-def test_no_special_dependence_when_there_is_no_meaningful_difference():
-    assert facts_of(load_price_fixture("c")).special_dependent == []
+MILK = [priced("milk", COLES, "milk", "col-milk-01"), priced("milk", WOOL, "milk", "wol-milk-01")]
+TUE = date(2026, 10, 20)  # the sale week of AS_OF (Wed 2026-10-14) ends on this Tuesday
+
+
+def chicken(coles, wool_special, wool_regular, ends=TUE):
+    return [
+        with_total(priced("chicken", COLES, "chicken breast", "col-chicken-breast-01"), coles),
+        on_special(
+            priced("chicken", WOOL, "chicken breast", "wol-chicken-breast-01"),
+            wool_special,
+            wool_regular,
+            ends,
+        ),  # fmt: skip
+    ]
+
+
+def test_verdict_is_conditional_when_the_special_decides_it():
+    v = rule_verdict(chicken("30.00", "20.00", "29.00") + MILK, BOTH, CFG, AS_OF)
+    assert v.kind == "one_store" and v.store == WOOL and v.gap == D("10.10")  # at current prices
+    c = v.condition
+    assert c.valid_until == TUE and c.items == ["chicken"]
+    fb = c.fallback  # at regular prices Woolworths is only $1.10 cheaper
+    assert fb.kind == "no_meaningful_difference" and fb.gap == D("1.10") and fb.threshold == D(8)
+    assert fb.totals == {COLES: D("33.10"), WOOL: D("32.00")}
+    assert v.totals[WOOL] == D("23.00")  # the verdict's own numbers are the current prices
+
+
+def test_verdict_has_no_condition_when_the_outcome_is_the_same_without_the_special():
+    # the special saves $1 of a $25 lead
+    v = rule_verdict(chicken("45.00", "28.00", "29.00") + MILK, BOTH, CFG, AS_OF)
+    assert v.kind == "one_store" and v.condition is None
+    # no special on any pick
+    assert rule_verdict(load_price_fixture("b").items, BOTH, CFG, AS_OF).condition is None
+    # a special exists in fixture c, but the answer is no meaningful difference either way
+    c = load_price_fixture("c")
+    assert any(r.on_special for r in c.items)
+    assert rule_verdict(c.items, BOTH, CFG, c.as_of).condition is None
+
+
+def test_condition_ends_with_the_earliest_special_that_changes_the_outcome():
+    soon, later = date(2026, 10, 20), date(2026, 10, 27)
+    rows = [
+        *chicken("30.00", "20.00", "29.00", ends=later),  # decides the verdict
+        on_special(priced("milk", COLES, "milk", "col-milk-01"), "2.00", "3.10", soon),  # does not
+        priced("milk", WOOL, "milk", "wol-milk-01"),
+    ]
+    c = rule_verdict(rows, BOTH, CFG, AS_OF).condition
+    assert c.items == ["chicken"] and c.valid_until == later  # not the earlier, irrelevant one
+    # when no single special decides it, all specials count and the earliest end date wins
+    both = [
+        on_special(
+            priced("a", COLES, "beef eye fillet", "col-eye-fillet-01"), "5.00", "15.00", soon
+        ),
+        priced("a", WOOL, "beef eye fillet", "wol-eye-fillet-01"),
+        on_special(priced("b", COLES, "rump steak", "col-rump-steak-01"), "4.00", "12.50", later),
+        priced("b", WOOL, "rump steak", "wol-rump-steak-01"),
+    ]  # fmt: skip
+    v = rule_verdict(both, BOTH, CFG, AS_OF)
+    assert v.kind == "one_store" and v.store == COLES and v.gap == D("24.50")
+    assert sorted(v.condition.items) == ["a", "b"] and v.condition.valid_until == soon
+    assert v.condition.fallback.kind == "no_meaningful_difference"
+
+
+def test_a_special_that_has_already_ended_is_not_a_condition():
+    rows = chicken("30.00", "20.00", "29.00", ends=date(2026, 10, 13)) + MILK
+    assert rule_verdict(rows, BOTH, CFG, AS_OF).condition is None
+
+
+def test_conditional_verdict_flags_the_special_as_information_only():
+    f = build_facts(chicken("30.00", "20.00", "29.00") + MILK, BOTH, CFG, AS_OF)
+    assert f.verdict.condition is not None
+    assert "special_dependency" not in {x.kind for x in f.flags}
+    ending = next(x for x in f.flags if x.kind == "special_ending")
+    assert ending.ends_on == TUE and ending.ends_in_days == 6
 
 
 def test_summary_lines():
@@ -358,9 +408,6 @@ def test_override_needs_a_reason_and_consistent_flags():
 
 def test_override_reasons_must_be_backed_by_the_flags():
     a = facts_of(load_price_fixture("a"))  # one tier-gap item (fries), no ending special
-    sp = out(recommendation="one_store", store="woolworths", overridden=True,
-             override_reason="special_dependency")  # fmt: skip
-    assert any("special_dependency is not allowed" in x for x in problems(a, sp))
     b = facts_of(load_price_fixture("b"))  # nothing doubtful at all
     mq = out(recommendation="one_store", store="woolworths", overridden=True,
              override_reason="match_quality")  # fmt: skip
@@ -552,7 +599,7 @@ def test_what_if_tool_returns_code_numbers_and_registers_them_as_quotable():
 
 
 def test_system_prompt_states_the_ground_rules():
-    for phrase in ("DATA", "Follow rule_verdict", "special_dependency", "match_quality",
+    for phrase in ("DATA", "Follow rule_verdict", "condition.valid_until", "match_quality",
                    "what_if_split", "Never compute", "at most twice"):  # fmt: skip
         assert phrase in SYSTEM_PROMPT
 
@@ -589,9 +636,9 @@ def test_a_tip_that_mentions_a_special_must_cite_the_end_date():
     chicken, yoghurt = item_id_named(fix, "chicken breast"), item_id_named(fix, "yoghurt")
     bare = out(tips=[Tip(item_id=chicken, text="Chicken breast is on special at Woolworths.")])
     assert any(
-        "must state when it ends, written exactly as 2026-10-15" in x for x in problems(c, bare)
+        "must state when it ends, written exactly as 2026-10-20" in x for x in problems(c, bare)
     )
-    dated = out(tips=[Tip(item_id=chicken, text="Chicken breast is on special until 2026-10-15.")])
+    dated = out(tips=[Tip(item_id=chicken, text="Chicken breast is on special until 2026-10-20.")])
     assert problems(c, dated) == []
     no_special = out(tips=[Tip(item_id=yoghurt, text="Yoghurt is on special at Coles.")])
     assert any("mentions a special, but that item has none" in x for x in problems(c, no_special))
@@ -609,25 +656,25 @@ def test_special_ending_flags_are_informational_and_follow_as_of():
 
     chicken, bacon = item_id_named(fix, "chicken breast"), item_id_named(fix, "bacon")
     assert ending(fix.as_of) == {
-        (chicken, "woolworths"): ("2026-10-15", 3),
-        (bacon, "coles"): ("2026-10-18", 6),
+        (chicken, "woolworths"): ("2026-10-20", 6),
+        (bacon, "coles"): ("2026-10-20", 6),
     }
     from datetime import date
 
-    assert (chicken, "woolworths") not in ending(date(2026, 10, 7))  # 8 days away: outside 7
-    assert ending(date(2026, 10, 8))[(chicken, "woolworths")] == ("2026-10-15", 7)  # exactly 7
-    assert (chicken, "woolworths") not in ending(date(2026, 10, 16))  # already ended
+    assert (chicken, "woolworths") not in ending(date(2026, 10, 12))  # 8 days away: outside 7
+    assert ending(date(2026, 10, 13))[(chicken, "woolworths")] == ("2026-10-20", 7)  # exactly 7
+    assert (chicken, "woolworths") not in ending(date(2026, 10, 21))  # already ended
     flag = next(
         f for f in facts_of(fix).flags if f.kind == "special_ending" and f.item_id == chicken
     )
     assert (
         flag.message
-        == "chicken breast is on special at woolworths until 2026-10-15 (3 days from now)"
+        == "chicken breast is on special at woolworths until 2026-10-20 (6 days from now)"
     )
-    # information only: no override is allowed on a special_ending flag alone
+    # information only: it is not a reason to override
     sp = out(recommendation="one_store", store="coles", overridden=True,
-             override_reason="special_dependency")  # fmt: skip
-    assert any("special_dependency is not allowed" in x for x in problems(facts_of(fix), sp))
+             override_reason="match_quality")  # fmt: skip
+    assert not any("special" in x for x in problems(facts_of(fix), sp))
 
 
 def test_assumptions_may_only_cover_data_and_pricing():
@@ -659,25 +706,46 @@ def test_pack_gap_alone_does_not_justify_a_recheck():
     assert "pack" not in recheck_line
 
 
-def test_scenario_f_special_tomorrow_depends_on_the_special():
-    f = special_tomorrow_scenario()
+def test_scenario_f_special_makes_the_verdict_conditional():
+    f = special_scenario()
     facts = facts_of(f)
     mince = item_id_named(f, "beef mince")
-    assert facts.verdict.kind == "one_store" and facts.verdict.store == WOOL
-    assert facts.verdict.gap == D("11.40") and facts.special_dependent == [mince]
-    dep = next(x for x in facts.flags if x.kind == "special_dependency")
-    assert (dep.item_id, dep.ends_in_days) == (mince, 1) and dep.ends_on.isoformat() == "2026-10-13"
+    v = facts.verdict
+    assert f.as_of.isoformat() == "2026-10-19"  # a Monday; the sale week ends tomorrow
+    assert v.kind == "one_store" and v.store == WOOL and v.gap == D("11.40")
+    c = v.condition
+    assert c.items == [mince] and c.valid_until.isoformat() == "2026-10-20"
+    assert c.fallback.kind == "no_meaningful_difference" and c.fallback.gap == D("1.40")
     assert any(x.kind == "special_ending" and x.ends_in_days == 1 for x in facts.flags)
-    follow = out(recommendation="no_meaningful_difference", overridden=True,
-                 override_reason="special_dependency")  # fmt: skip
-    assert problems(facts, follow) == []
-    # code backstop: following the verdict anyway is sent back for repair
-    ignored = problems(facts, out(recommendation="one_store", store="woolworths", overridden=False))
-    assert any("depends on a special that ends soon" in x for x in ignored)
-    # and nothing is demanded when the verdict does not lean on a special
-    assert not any("special" in x for x in problems(facts_of(load_price_fixture("b")), out()))
+    # the planner follows the verdict (no override) and must say until when it holds
+    ok = out(recommendation="one_store", store="woolworths", overridden=False,
+             reasoning="Woolworths is cheaper if you shop by Tue 20 Oct; after that the "
+                       "stores are about level.")  # fmt: skip
+    assert problems(facts, ok) == []
+    silent = out(recommendation="one_store", store="woolworths", overridden=False)
+    assert any("only holds until Tue 20 Oct" in x for x in problems(facts, silent))
+    iso = out(recommendation="one_store", store="woolworths", overridden=False,
+              reasoning="Cheaper until 2026-10-20, then level.")  # fmt: skip
+    assert problems(facts, iso) == []
+    # special_dependency is gone; match_quality needs doubtful items, and there are none
     assert any("match_quality is not allowed" in x for x in problems(
         facts, out(overridden=True, override_reason="match_quality")))  # fmt: skip
+    with pytest.raises(ValueError):
+        out(overridden=True, override_reason="special_dependency")
+
+
+def test_conditional_verdict_reaches_the_model_input():
+    facts = facts_of(special_scenario())
+    cond = model_input(facts)["rule_verdict"]["condition"]
+    assert cond["valid_until"] == "2026-10-20" and cond["valid_until_text"] == "Tue 20 Oct"
+    assert cond["items_on_special"] == [{"item_id": "i2", "name": "beef mince"}] or (
+        cond["items_on_special"][0]["name"] == "beef mince"
+    )
+    assert (
+        cond["fallback"]["kind"] == "no_meaningful_difference" and cond["fallback"]["gap"] == "1.40"
+    )
+    assert model_input(facts_of(load_price_fixture("a")))["rule_verdict"]["condition"] is None
+    assert "52.00" in json.dumps(model_input(facts))  # the regular cost is quotable
 
 
 def test_scenario_g_doubtful_match_drives_the_saving():
@@ -686,7 +754,7 @@ def test_scenario_g_doubtful_match_drives_the_saving():
     mince = item_id_named(f, "beef mince")
     assert facts.verdict.kind == "one_store" and facts.verdict.gap == D("11.40")
     assert mince in facts.quality_issues and mince in facts.recheck_candidates
-    assert facts.confidence == "low" and facts.special_dependent == []
+    assert facts.confidence == "low" and facts.verdict.condition is None
     assert {x.kind for x in facts.flags} >= {"tier_gap"}
     recheck = Recheck(item_id=mince, hint="find a like-for-like mince")
     override = out(
@@ -696,26 +764,35 @@ def test_scenario_g_doubtful_match_drives_the_saving():
         recheck_items=[recheck],
     )
     assert problems(facts, override) == []
-    assert any("special_dependency is not allowed" in x for x in problems(
-        facts, out(overridden=True, override_reason="special_dependency")))  # fmt: skip
 
 
 def test_prompt_version_and_assumption_rule_in_prompt():
     result, _ = plan(load_price_fixture("a"), out())
-    assert result.prompt_version == "3"
+    assert result.prompt_version == "4"
     assert "Never assume anything about the shopper" in SYSTEM_PROMPT
     assert "tip_minimum_saving" in SYSTEM_PROMPT and "state the date it ends" in SYSTEM_PROMPT
     assert "MUST recommend no_meaningful_difference" in SYSTEM_PROMPT
+    assert (
+        "You do NOT override for this" in SYSTEM_PROMPT
+        and "special_dependency" not in SYSTEM_PROMPT
+    )
     assert "never tell the shopper to trust a result whose confidence is low" in SYSTEM_PROMPT
 
 
-def test_summary_line_says_why_an_override_held_the_verdict_back():
-    f = facts_of(special_tomorrow_scenario())
-    line, savings = summary_line(f, "no_meaningful_difference", None, "special_dependency")
+def test_summary_line_states_the_condition():
+    f = facts_of(special_scenario())
+    line, savings = summary_line(f, "one_store", None)
     assert line == (
-        "No meaningful difference: Woolworths is $11.40 cheaper on 7 common items "
-        "(threshold $8.00), but the saving depends on a special ending 2026-10-13."
-    ) and savings == D(0)
+        "Woolworths is $11.40 cheaper if you shop by Tue 20 Oct (beef mince special); "
+        "after that, no meaningful difference."
+    ) and savings == D("11.40")
+    assert summary_line(facts_of(load_price_fixture("a")), "one_store", None)[0].startswith("Shop")
+    # a split or a one_store whose fallback is another store says so
+    v = rule_verdict(chicken("30.00", "20.00", "29.00") + MILK, BOTH, CFG, AS_OF)
+    assert v.condition.fallback.kind == "no_meaningful_difference"
+
+
+def test_summary_line_says_why_an_override_held_the_verdict_back():
     g = facts_of(doubtful_match_scenario())
     line, _ = summary_line(g, "no_meaningful_difference", None, "match_quality")
     assert line.endswith("(threshold $8.00), but the comparison is not like for like.")

@@ -13,7 +13,7 @@ from grocery_planner.tools.price_lookup import (
 
 @pytest.fixture(scope="module")
 def source() -> SeededFilePriceSource:
-    return SeededFilePriceSource(anchor=date(2026, 10, 12))
+    return SeededFilePriceSource(anchor=date(2026, 10, 14))
 
 
 def by_id(source, term, store, pid):

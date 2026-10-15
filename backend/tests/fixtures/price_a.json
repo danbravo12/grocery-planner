@@ -1,6 +1,6 @@
 {
  "name": "a",
- "as_of": "2026-10-12",
+ "as_of": "2026-10-14",
  "captured_with_model": "gemini-3.1-flash-lite",
  "items": [
   {
@@ -15,16 +15,18 @@
    "pack_size": "1000",
    "pack_unit": "g",
    "price": "3.00",
+   "regular_price": "4.50",
    "unit_price": "0.3000",
    "on_special": true,
-   "special_end_date": "2026-10-18",
+   "special_end_date": "2026-10-27",
    "packs_needed": 1,
    "purchased_qty": "1000",
    "leftover_qty": "700",
    "total_cost": "3.00",
+   "regular_total_cost": "4.50",
    "match_tier": "equivalent",
    "match_confidence": "high",
-   "price_timestamp": "2026-10-12T00:00:00+11:00",
+   "price_timestamp": "2026-10-14T00:00:00+11:00",
    "data_source": "seeded"
   },
   {
@@ -39,6 +41,7 @@
    "pack_size": "1000",
    "pack_unit": "g",
    "price": "3.20",
+   "regular_price": "3.20",
    "unit_price": "0.3200",
    "on_special": false,
    "special_end_date": null,
@@ -46,9 +49,10 @@
    "purchased_qty": "1000",
    "leftover_qty": "700",
    "total_cost": "3.20",
+   "regular_total_cost": "3.20",
    "match_tier": "equivalent",
    "match_confidence": "high",
-   "price_timestamp": "2026-10-12T00:00:00+11:00",
+   "price_timestamp": "2026-10-14T00:00:00+11:00",
    "data_source": "seeded"
   },
   {
@@ -63,6 +67,7 @@
    "pack_size": "400",
    "pack_unit": "g",
    "price": "22.00",
+   "regular_price": "22.00",
    "unit_price": "5.5000",
    "on_special": false,
    "special_end_date": null,
@@ -70,9 +75,10 @@
    "purchased_qty": "400",
    "leftover_qty": "0",
    "total_cost": "22.00",
+   "regular_total_cost": "22.00",
    "match_tier": "equivalent",
    "match_confidence": "high",
-   "price_timestamp": "2026-10-12T00:00:00+11:00",
+   "price_timestamp": "2026-10-14T00:00:00+11:00",
    "data_source": "seeded"
   },
   {
@@ -87,6 +93,7 @@
    "pack_size": "400",
    "pack_unit": "g",
    "price": "21.50",
+   "regular_price": "21.50",
    "unit_price": "5.3750",
    "on_special": false,
    "special_end_date": null,
@@ -94,9 +101,10 @@
    "purchased_qty": "400",
    "leftover_qty": "0",
    "total_cost": "21.50",
+   "regular_total_cost": "21.50",
    "match_tier": "equivalent",
    "match_confidence": "high",
-   "price_timestamp": "2026-10-12T00:00:00+11:00",
+   "price_timestamp": "2026-10-14T00:00:00+11:00",
    "data_source": "seeded"
   },
   {
@@ -111,6 +119,7 @@
    "pack_size": "400",
    "pack_unit": "g",
    "price": "3.50",
+   "regular_price": "3.50",
    "unit_price": "0.8750",
    "on_special": false,
    "special_end_date": null,
@@ -118,9 +127,10 @@
    "purchased_qty": "400",
    "leftover_qty": "340",
    "total_cost": "3.50",
+   "regular_total_cost": "3.50",
    "match_tier": "equivalent",
    "match_confidence": "high",
-   "price_timestamp": "2026-10-12T00:00:00+11:00",
+   "price_timestamp": "2026-10-14T00:00:00+11:00",
    "data_source": "seeded"
   },
   {
@@ -135,6 +145,7 @@
    "pack_size": "400",
    "pack_unit": "g",
    "price": "3.20",
+   "regular_price": "3.20",
    "unit_price": "0.8000",
    "on_special": false,
    "special_end_date": null,
@@ -142,9 +153,10 @@
    "purchased_qty": "400",
    "leftover_qty": "340",
    "total_cost": "3.20",
+   "regular_total_cost": "3.20",
    "match_tier": "equivalent",
    "match_confidence": "high",
-   "price_timestamp": "2026-10-12T00:00:00+11:00",
+   "price_timestamp": "2026-10-14T00:00:00+11:00",
    "data_source": "seeded"
   },
   {
@@ -159,6 +171,7 @@
    "pack_size": "2000",
    "pack_unit": "g",
    "price": "6.00",
+   "regular_price": "6.00",
    "unit_price": "0.3000",
    "on_special": false,
    "special_end_date": null,
@@ -166,9 +179,10 @@
    "purchased_qty": "2000",
    "leftover_qty": "1400",
    "total_cost": "6.00",
+   "regular_total_cost": "6.00",
    "match_tier": "equivalent",
    "match_confidence": "high",
-   "price_timestamp": "2026-10-12T00:00:00+11:00",
+   "price_timestamp": "2026-10-14T00:00:00+11:00",
    "data_source": "seeded"
   },
   {
@@ -183,6 +197,7 @@
    "pack_size": "2000",
    "pack_unit": "g",
    "price": "5.80",
+   "regular_price": "5.80",
    "unit_price": "0.2900",
    "on_special": false,
    "special_end_date": null,
@@ -190,9 +205,10 @@
    "purchased_qty": "2000",
    "leftover_qty": "1400",
    "total_cost": "5.80",
+   "regular_total_cost": "5.80",
    "match_tier": "equivalent",
    "match_confidence": "high",
-   "price_timestamp": "2026-10-12T00:00:00+11:00",
+   "price_timestamp": "2026-10-14T00:00:00+11:00",
    "data_source": "seeded"
   },
   {
@@ -207,6 +223,7 @@
    "pack_size": "6",
    "pack_unit": "each",
    "price": "2.50",
+   "regular_price": "2.50",
    "unit_price": "0.4167",
    "on_special": false,
    "special_end_date": null,
@@ -214,9 +231,10 @@
    "purchased_qty": "6",
    "leftover_qty": "4",
    "total_cost": "2.50",
+   "regular_total_cost": "2.50",
    "match_tier": "equivalent",
    "match_confidence": "high",
-   "price_timestamp": "2026-10-12T00:00:00+11:00",
+   "price_timestamp": "2026-10-14T00:00:00+11:00",
    "data_source": "seeded"
   },
   {
@@ -231,6 +249,7 @@
    "pack_size": "6",
    "pack_unit": "each",
    "price": "2.30",
+   "regular_price": "2.30",
    "unit_price": "0.3833",
    "on_special": false,
    "special_end_date": null,
@@ -238,9 +257,10 @@
    "purchased_qty": "6",
    "leftover_qty": "4",
    "total_cost": "2.30",
+   "regular_total_cost": "2.30",
    "match_tier": "equivalent",
    "match_confidence": "high",
-   "price_timestamp": "2026-10-12T00:00:00+11:00",
+   "price_timestamp": "2026-10-14T00:00:00+11:00",
    "data_source": "seeded"
   }
  ]

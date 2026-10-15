@@ -18,11 +18,13 @@ _PRODUCT_FIELDS = (
     "pack_size",
     "pack_unit",
     "price",
+    "regular_price",
     "unit_price",
     "packs_needed",
     "purchased_qty",
     "leftover_qty",
     "total_cost",
+    "regular_total_cost",
     "price_timestamp",
     "data_source",
 )
@@ -43,7 +45,8 @@ class PricedItem(BaseModel):
     brand_label: BrandLabel | None = None
     pack_size: Decimal | None = None
     pack_unit: PackUnit | None = None
-    price: Decimal | None = None
+    price: Decimal | None = None  # shelf price now (the special price when on_special)
+    regular_price: Decimal | None = None  # shelf price once any special is over (= price if none)
     unit_price: Decimal | None = None
     on_special: bool = False
     special_end_date: date | None = None
@@ -51,6 +54,9 @@ class PricedItem(BaseModel):
     purchased_qty: Decimal | None = None  # packs_needed x pack_size
     leftover_qty: Decimal | None = None  # purchased_qty - needed; shown, never credited
     total_cost: Decimal | None = None
+    regular_total_cost: Decimal | None = (
+        None  # same packs at the regular price (= total_cost if none)
+    )
     match_tier: MatchTier
     match_confidence: MatchConfidence
     price_timestamp: datetime | None = None
@@ -59,8 +65,10 @@ class PricedItem(BaseModel):
     @field_validator(
         "pack_size",
         "price",
+        "regular_price",
         "unit_price",
         "total_cost",
+        "regular_total_cost",
         "purchased_qty",
         "leftover_qty",
         mode="before",

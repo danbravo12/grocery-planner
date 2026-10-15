@@ -23,7 +23,7 @@ from grocery_planner.llm.types import (
 )
 from grocery_planner.tracing import would_cost
 
-ANCHOR_ISO = "2026-10-12"  # the fixed as_of every eval uses (a Monday); seed dates resolve to it
+ANCHOR_ISO = "2026-10-14"  # the fixed as_of every eval uses (a Wednesday); seed dates resolve to it
 EVAL_LIMITER = RateLimiter(per_minute=12, max_wait=180.0)
 
 

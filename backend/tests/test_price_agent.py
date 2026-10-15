@@ -18,7 +18,7 @@ from grocery_planner.llm import FakeLLMClient
 from grocery_planner.tools.planner_math import coverage, rule_verdict, should_stop
 from grocery_planner.tools.price_lookup import SeededFilePriceSource, pack_gap_exceeds
 
-AS_OF = date(2026, 10, 12)
+AS_OF = date(2026, 10, 14)
 SOURCE = SeededFilePriceSource(anchor=AS_OF)
 CFG = PlannerConfig()
 COLES, WOOL = Store.COLES, Store.WOOLWORTHS
@@ -426,13 +426,13 @@ def test_seed_edge_cases_with_a_scripted_model():
     assert any(f.kind == "tier_gap" and f.item_id == "i5" for f in result.flags)
     # e) named brand at both stores stays exact
     assert tiers[("i6", "coles")] == tiers[("i6", "woolworths")] == "exact"
-    # c) special ending mid-week is visible on the row and (3 days) in the model input
+    # c) special ending mid-week is visible on the row and (6 days) in the model input
     chicken = row(result, "i7", WOOL)
-    assert chicken.on_special and chicken.special_end_date == date(2026, 10, 15)
+    assert chicken.on_special and chicken.special_end_date == date(2026, 10, 20)
     wool_cands = payload(fake)["items"][6]["stores"]["woolworths"]
     assert (
         next(c for c in wool_cands if c["candidate_id"] == "wol-chicken-breast-01")["ends_in_days"]
-        == 3
+        == 6
     )
     assert result.downgrades == []  # nothing in the script broke a rule
 
@@ -450,8 +450,8 @@ def test_seed_edge_cases_with_a_scripted_model():
         s.item_id: (s.tier_gap_flag, s.pack_gap_flag, s.special_flag) for s in verdict.item_savings
     }
     assert flags["i4"] == (False, True, False)  # yoghurt: pack gap
-    assert flags["i5"] == (True, False, True)  # bacon: tier gap, special ends in 6 days
-    assert flags["i7"] == (False, False, True)  # chicken: special ends in 3 days
+    assert flags["i5"] == (True, False, True)  # bacon: tier gap, special ends Tue 2026-10-20
+    assert flags["i7"] == (False, False, True)  # chicken: special ends Tue 2026-10-20
     assert flags["i3"] == (False, False, False)
 
 

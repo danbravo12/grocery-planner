@@ -6,7 +6,7 @@ from decimal import Decimal
 from grocery_planner.domain import MatchConfidence, MatchTier, PricedItem, Store
 from grocery_planner.tools.price_lookup import SeededFilePriceSource, packs_needed
 
-AS_OF = date(2026, 10, 12)
+AS_OF = date(2026, 10, 14)  # a Wednesday: sale week to Tue 2026-10-20, next to Tue 2026-10-27
 SOURCE = SeededFilePriceSource(anchor=AS_OF)
 COLES, WOOL = Store.COLES, Store.WOOLWORTHS
 
@@ -29,6 +29,10 @@ def priced(
     if factor is not None:
         product = product.model_copy(update={"price": product.price * Decimal(factor)})
     packs, total, leftover = packs_needed(product.pack_size, product.pack_unit, product)
+    if price is not None or factor is not None:  # a constructed price is also the regular price
+        regular = product.price
+    else:
+        regular = product.regular_price if product.regular_price is not None else product.price
     return PricedItem(
         item_id=item_id,
         item_name=term,
@@ -41,6 +45,7 @@ def priced(
         pack_size=product.pack_size,
         pack_unit=product.pack_unit,
         price=product.price,
+        regular_price=regular,
         unit_price=product.unit_price,
         on_special=product.on_special,
         special_end_date=product.special_end_date,
@@ -48,6 +53,7 @@ def priced(
         purchased_qty=packs * product.pack_size,
         leftover_qty=leftover,
         total_cost=total,
+        regular_total_cost=regular * packs,
         match_tier=tier,
         match_confidence="high",
         price_timestamp=product.price_timestamp,
@@ -85,11 +91,13 @@ def synthetic(
         pack_size=Decimal(1),
         pack_unit="each",
         price=cost,
+        regular_price=cost,
         unit_price=cost,
         packs_needed=1,
         purchased_qty=Decimal(1),
         leftover_qty=Decimal(0),
         total_cost=cost,
+        regular_total_cost=cost,
         match_tier=tier,
         match_confidence=confidence,
         price_timestamp=datetime(2026, 10, 12),

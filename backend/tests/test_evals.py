@@ -42,7 +42,7 @@ def of(agent: str) -> list[Case]:
 def test_case_set_has_the_planned_shape():
     assert 30 <= len(CASES) <= 40
     counts = {a: len(of(a)) for a in AGENTS}
-    assert counts == {"ingredient": 12, "price": 12, "planner": 10, "e2e": 4}
+    assert counts == {"ingredient": 12, "price": 12, "planner": 11, "e2e": 4}
     assert all(c.notes.strip() for c in CASES)  # each case says why it exists
 
 
@@ -91,8 +91,13 @@ def test_planner_expectations_that_code_decides_hold_for_the_inputs():
             assert facts.split.savings < facts.verdict.threshold, c.id  # tool is not offered
         if k.get("overridden") is False:
             assert k["recommendation"] == facts.verdict.kind, c.id
-        if k.get("override_reason") == "special_dependency":
-            assert facts.special_dependent, c.id
+        if "condition" in k:
+            cond = facts.verdict.condition
+            if k["condition"] is None:
+                assert cond is None, c.id
+            else:
+                assert cond.valid_until.isoformat() == k["condition"]["valid_until"], c.id
+                assert cond.fallback.kind == k["condition"]["fallback"], c.id
         if k.get("override_reason") == "match_quality":
             assert facts.quality_issues, c.id
         if k.get("store"):

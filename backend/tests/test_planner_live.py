@@ -15,7 +15,7 @@ from tests.fixtures import (
     doubtful_match_scenario,
     large_gap_scenario,
     load_price_fixture,
-    special_tomorrow_scenario,
+    special_scenario,
     split_scenario,
 )
 
@@ -84,9 +84,10 @@ def test_e_split(llm):
 
 
 def test_f_saving_only_from_a_special_ending_tomorrow(llm):
-    r = go("(f) beef mince special at Woolworths ends tomorrow", special_tomorrow_scenario(), llm)
-    assert r.rule_verdict.kind == "one_store"
-    assert r.overridden is True and r.override_reason == "special_dependency"
+    r = go("(f) beef mince special at Woolworths until Tue 20 Oct", special_scenario(), llm)
+    assert r.rule_verdict.kind == "one_store" and r.rule_verdict.condition is not None
+    assert r.recommendation == "one_store" and r.overridden is False
+    assert "Tue 20 Oct" in r.reasoning or "2026-10-20" in r.reasoning
 
 
 def test_g_saving_only_from_a_doubtful_match(llm):

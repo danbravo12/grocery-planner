@@ -14,6 +14,7 @@ from grocery_planner.domain import PlannerConfig, PricedItem, Store
 from grocery_planner.tools.price_lookup import (
     DEFAULT_TOLERANCE,
     pack_gap_exceeds,
+    special_active,
     specials_ending_within,
 )
 
@@ -57,6 +58,26 @@ class SplitResult(BaseModel):
     savings: Decimal  # cheapest_single_total - total
 
 
+class Fallback(BaseModel):
+    """The verdict at regular prices (every pick on special put back to its regular price)."""
+
+    kind: Literal["no_meaningful_difference", "one_store", "split"]
+    store: Store | None
+    assignment: dict[str, Store] | None
+    totals: dict[Store, Decimal]
+    gap: Decimal
+    threshold: Decimal
+    split_savings: Decimal
+
+
+class Condition(BaseModel):
+    """The verdict only holds while some specials last."""
+
+    valid_until: date  # the earliest end date among the specials that change the outcome
+    items: list[str]  # those item ids
+    fallback: Fallback  # what the verdict is once the specials are over
+
+
 class Verdict(BaseModel):
     kind: Literal["no_meaningful_difference", "one_store", "split"]
     store: Store | None  # set for one_store
@@ -68,6 +89,7 @@ class Verdict(BaseModel):
     split_total: Decimal
     split_savings: Decimal  # over the cheapest single store
     item_savings: list[ItemSaving]
+    condition: Condition | None = None  # None when specials do not change the outcome
 
 
 # ---- helpers -------------------------------------------------------------------------------
@@ -252,16 +274,9 @@ def savings_threshold(basket_total: Decimal, config: PlannerConfig) -> Decimal:
     return max(config.savings_threshold_dollars, config.savings_threshold_pct * basket_total)
 
 
-def rule_verdict(
+def _core_verdict(
     items: Sequence[PricedItem], stores: Sequence[Store], config: PlannerConfig, as_of: date
 ) -> Verdict:
-    """Apply the decision rule. Meeting the threshold exactly counts as meeting it."""
-    if len(stores) < 2:
-        raise ValueError("need at least two stores to compare")
-    if not common_items(items, stores):
-        # Invariant: should_stop guarantees this never happens (it stops when comparable
-        # items fall below stop_comparable_pct, which is at least 40%).
-        raise ValueError("no common items to compare")
     totals = basket_totals(items, stores)
     ranked = sorted(stores, key=lambda s: totals[s])  # stable: ties keep `stores` order
     cheapest = ranked[0]
@@ -286,3 +301,85 @@ def rule_verdict(
         split_savings=split.savings,
         item_savings=per_item_savings(items, stores, as_of, config.pack_size_tolerance),
     )
+
+
+def _same_outcome(a: Verdict, b: Verdict) -> bool:
+    """Same recommendation: the same kind, and the same store or the same split."""
+    return a.kind == b.kind and a.store == b.store and a.assignment == b.assignment
+
+
+def _at_regular_prices(items: Sequence[PricedItem], item_ids: set[str]) -> list[PricedItem]:
+    """Copies of the rows for these items with any active special put back to the regular price."""
+    out = []
+    for row in items:
+        if row.item_id in item_ids and row.on_special and row.regular_total_cost is not None:
+            row = row.model_copy(
+                update={
+                    "total_cost": row.regular_total_cost,
+                    "price": row.regular_price,
+                    "on_special": False,
+                    "special_end_date": None,
+                }
+            )
+        out.append(row)
+    return out
+
+
+def rule_verdict(
+    items: Sequence[PricedItem], stores: Sequence[Store], config: PlannerConfig, as_of: date
+) -> Verdict:
+    """Apply the decision rule. Meeting the threshold exactly counts as meeting it.
+
+    The rule runs twice: at current prices, and with every usable pick on special put back to its
+    regular price. If the two recommendations differ, the current-price verdict is returned with
+    a condition: it holds until the earliest end date among the specials that change the outcome
+    (tried one at a time; all of them together if none does alone), and `fallback` is the
+    regular-price verdict. If they agree, condition is None."""
+    if len(stores) < 2:
+        raise ValueError("need at least two stores to compare")
+    if not common_items(items, stores):
+        # Invariant: should_stop guarantees this never happens (it stops when comparable
+        # items fall below stop_comparable_pct, which is at least 40%).
+        raise ValueError("no common items to compare")
+    verdict = _core_verdict(items, stores, config, as_of)
+    common = set(common_items(items, stores))
+    on_special = sorted(
+        {
+            r.item_id
+            for r in items
+            if r.store in stores
+            and r.item_id in common
+            and r.on_special
+            and special_active(r, as_of)
+        }
+    )
+    if not on_special:
+        return verdict
+    regular = _core_verdict(_at_regular_prices(items, set(on_special)), stores, config, as_of)
+    if _same_outcome(verdict, regular):
+        return verdict
+    changers = [
+        i
+        for i in on_special
+        if not _same_outcome(
+            verdict, _core_verdict(_at_regular_prices(items, {i}), stores, config, as_of)
+        )
+    ] or on_special
+    ends = [
+        r.special_end_date
+        for r in items
+        if r.item_id in changers and r.on_special and r.special_end_date is not None
+    ]
+    if not ends:
+        return verdict  # specials with no end date never stop
+    fallback = Fallback(
+        kind=regular.kind,
+        store=regular.store,
+        assignment=regular.assignment,
+        totals=regular.totals,
+        gap=regular.gap,
+        threshold=regular.threshold,
+        split_savings=regular.split_savings,
+    )
+    condition = Condition(valid_until=min(ends), items=changers, fallback=fallback)
+    return verdict.model_copy(update={"condition": condition})

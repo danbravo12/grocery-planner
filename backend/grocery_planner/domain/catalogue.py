@@ -35,11 +35,12 @@ class CatalogueProduct(BaseModel):
     price: Decimal = Field(gt=0)  # current shelf price (the special price when on_special)
     on_special: bool = False
     special_end_date: date | None = None
+    regular_price: Decimal | None = None  # shelf price once the special is over; set iff on_special
     price_timestamp: datetime
     data_source: Literal["seeded"] = "seeded"
     quality_band: QualityBand
 
-    @field_validator("price", "pack_size", mode="before")
+    @field_validator("price", "pack_size", "regular_price", mode="before")
     @classmethod
     def _no_floats(cls, v: object) -> object:
         if isinstance(v, float):
@@ -50,6 +51,12 @@ class CatalogueProduct(BaseModel):
     def _special_end_needs_special(self) -> Self:
         if self.special_end_date is not None and not self.on_special:
             raise ValueError("special_end_date set but on_special is false")
+        if self.on_special and self.regular_price is None:
+            raise ValueError("a product on special needs a regular_price")
+        if not self.on_special and self.regular_price is not None:
+            raise ValueError("regular_price is only for products on special")
+        if self.regular_price is not None and self.regular_price <= self.price:
+            raise ValueError("regular_price must be higher than the special price")
         return self
 
     @computed_field

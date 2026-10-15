@@ -31,11 +31,18 @@ from grocery_planner.tools.planner_math import (
 )
 from grocery_planner.tools.price_lookup import specials_ending_within
 
-PLANNER_PROMPT_VERSION = "3"
+PLANNER_PROMPT_VERSION = "4"
 MAX_TOOL_ROUNDS = 2
 TIP_MIN_FRACTION = Decimal("0.25")  # of the savings threshold (default $8 -> $2.00)
 SPECIAL_WINDOW_DAYS = 7
 TOP_ITEMS = 10
+
+
+def condition_date_text(d: date) -> str:
+    """How a date is written in the summary line and to the model: Tue 20 Oct."""
+    return f"{d:%a} {d.day} {d:%b}"
+
+
 Recommendation = Literal["no_meaningful_difference", "one_store", "split"]
 Confidence = Literal["high", "medium", "low"]
 
@@ -53,33 +60,34 @@ per store, gap between the two cheapest stores, threshold, and the best split wi
 top_item_savings (the biggest per-item differences, with each store's pick, tier and \
 confidence); best_split (the cheapest store for every item and what it would save over the \
 cheapest single store); coverage (how many items each store could price and which items are \
-missing); flags (missing items, substitutes, tier gaps, pack gaps, specials ending within 7 \
-days, and specials the result depends on); confidence (computed by code); and items (every \
+missing); flags (missing items, substitutes, tier gaps, pack gaps, and specials ending within 7 \
+days); confidence (computed by code); and items (every \
 comparable item with its category).
 
 The decision rule: one threshold applies to everything. A split is worth it only if its savings \
 meet the threshold; otherwise one store wins if its lead over the next cheapest store meets \
 the threshold; anything less is "no meaningful difference", which is a complete, valid answer. \
-Follow rule_verdict. You may recommend something different only for one of two reasons, and \
-then you must set overridden to true and override_reason to exactly one of:
-- special_dependency: the flags contain a special_dependency flag, meaning the result only holds \
-because of a special that ends within a week, so the advantage would disappear. A special_ending \
-flag on its own is only information and is not a reason to override.
-- match_quality: the result is driven by items whose match is doubtful (tier gap, pack gap, \
-substitute or low confidence), so the difference is not like for like.
-Two situations require an override when rule_verdict is one_store or split:
-- If the flags contain a special_dependency flag, you MUST recommend no_meaningful_difference \
-with overridden true and override_reason special_dependency. In the reasoning, name the special \
-and the date it ends, and say the saving is only there if the shopper buys before that date.
-- If confidence is low because the biggest savings come from items with a tier_gap or a \
-low-confidence pick, you MUST recommend no_meaningful_difference with overridden true and \
-override_reason match_quality, and list those items in recheck_items so the match can be \
-checked.
-Otherwise follow the verdict. If you follow the verdict, overridden is false and \
-override_reason is null. A one_store \
-recommendation must name the cheapest store. A split recommendation must list split_assignment \
-(each entry is an item_id or a category name, and a store) and its savings must meet the \
-threshold.
+Follow rule_verdict. The only reason to recommend something different is match_quality: the \
+result is driven by items whose match is doubtful (tier gap, pack gap, substitute or low \
+confidence), so the difference is not like for like. Then you must set overridden to true and \
+override_reason to "match_quality". If confidence is low because the biggest savings come from \
+items with a tier_gap or a low-confidence pick and rule_verdict is one_store or split, you MUST \
+recommend no_meaningful_difference with overridden true and override_reason match_quality, and \
+list those items in recheck_items so the match can be checked. Otherwise follow the verdict: \
+overridden is false and override_reason is null. A special_ending flag is only information.
+
+rule_verdict.condition: code also computes the verdict with every special put back to its regular \
+price. When that gives a different answer, rule_verdict has a condition: the verdict holds only \
+until condition.valid_until (the date the special on condition.items ends), and \
+condition.fallback is the verdict after that. You do NOT override for this: follow rule_verdict \
+and explain the condition in the reasoning. Say who is cheaper only if the shopper buys by \
+condition.valid_until_text, name the items on special, and say what the outcome is after that \
+date (the fallback). Write the date exactly as condition.valid_until_text (for example \
+Tue 20 Oct). When condition is null, specials do not change the answer.
+
+A one_store recommendation must name the cheapest store. A split recommendation must list \
+split_assignment (each entry is an item_id or a category name, and a store) and its savings \
+must meet the threshold.
 
 The what_if_split tool takes a list of {key, store} entries (key is an item_id or a category; \
 items not listed stay at the cheapest single store) and returns code-computed totals and \
@@ -129,7 +137,6 @@ class PlannerFlag(BaseModel):
         "tier_gap",
         "pack_gap",
         "special_ending",  # information: a pick is on a special ending within 7 days
-        "special_dependency",  # the verdict only holds because of such a special
     ]
     item_id: str | None = None
     store: Store | None = None
@@ -160,7 +167,7 @@ class PlannerOutput(BaseModel):
     store: str | None = None
     split_assignment: list[Assign] | None = None
     overridden: bool
-    override_reason: Literal["special_dependency", "match_quality"] | None = None
+    override_reason: Literal["match_quality"] | None = None
     reasoning: str
     tips: list[Tip] = Field(default_factory=list, max_length=3)
     recheck_items: list[Recheck] = Field(default_factory=list, max_length=5)
@@ -175,7 +182,7 @@ class PlannerResult(BaseModel):
     store: Store | None
     split_assignment: dict[str, Store] | None  # item_id -> store, for a split
     overridden: bool
-    override_reason: Literal["special_dependency", "match_quality"] | None
+    override_reason: Literal["match_quality"] | None
     reasoning: str
     tips: list[Tip]
     recheck_items: list[Recheck]
@@ -208,7 +215,6 @@ class PlannerFacts(BaseModel):
     savings: list[ItemSaving]  # every common item, biggest saving first
     flags: list[PlannerFlag]
     confidence: Confidence
-    special_dependent: list[str]  # item_ids whose ending special the verdict depends on
     quality_issues: list[str]  # common item_ids with a tier gap, pack gap or low-confidence pick
     recheck_candidates: list[str]  # items a re-match could change: no pack_gap
     tip_min: Decimal  # smallest store difference an item needs to earn a tip
@@ -246,8 +252,7 @@ def build_facts(
         or s.pack_gap_flag
         or any(rows[(s.item_id, st)].match_confidence == "low" for st in stores)
     ]
-    special_dependent = _special_dependent(verdict, split, savings)
-    flags = _flags(cov, savings, rows, stores, special_dependent, as_of, names)
+    flags = _flags(cov, savings, rows, stores, as_of, names)
     tip_min = _cents(verdict.threshold * TIP_MIN_FRACTION)
     recheck = sorted(
         {s.item_id for s in savings if s.tier_gap_flag}
@@ -268,6 +273,15 @@ def build_facts(
     for s in savings:
         amounts.add(_cents(s.saving))
         amounts.update(_cents(c) for c in s.costs.values())
+    if verdict.condition is not None:
+        fb = verdict.condition.fallback
+        amounts.update(_cents(v) for v in fb.totals.values())
+        amounts.update(_cents(v) for v in (fb.gap, fb.threshold, fb.split_savings))
+    amounts.update(
+        _cents(r.regular_total_cost)
+        for r in items
+        if r.on_special and r.regular_total_cost is not None
+    )
     return PlannerFacts(
         items=list(items),
         stores=stores,
@@ -279,7 +293,6 @@ def build_facts(
         savings=savings,
         flags=flags,
         confidence=confidence,
-        special_dependent=special_dependent,
         recheck_candidates=recheck,
         tip_min=tip_min,
         quality_issues=sorted(
@@ -297,31 +310,11 @@ def _has_substitute(rows: dict, item_id: str, stores: Sequence[Store]) -> bool:
     )
 
 
-def _special_dependent(
-    verdict: Verdict, split: SplitResult, savings: list[ItemSaving]
-) -> list[str]:
-    """Items whose ending special the verdict leans on: without the savings those items make
-    from specials ending within 7 days, the result would no longer meet the threshold."""
-    if verdict.kind == "no_meaningful_difference":
-        return []
-    margin = verdict.gap if verdict.kind == "one_store" else verdict.split_savings
-    if verdict.kind == "one_store":
-        relevant = [s for s in savings if s.special_flag and s.cheapest_store == verdict.store]
-    else:
-        moved = {i for i, st in split.assignment.items() if st != split.cheapest_single_store}
-        relevant = [s for s in savings if s.special_flag and s.item_id in moved]
-    from_specials = sum((s.saving for s in relevant), Decimal(0))
-    if relevant and margin - from_specials < verdict.threshold:
-        return [s.item_id for s in relevant]
-    return []
-
-
 def _flags(
     cov: Coverage,
     savings: list[ItemSaving],
     rows: dict[tuple[str, Store], PricedItem],
     stores: Sequence[Store],
-    special_dependent: list[str],
     as_of: date,
     names: dict[str, str],
 ) -> list[PlannerFlag]:
@@ -391,22 +384,6 @@ def _flags(
                         f"{row.special_end_date.isoformat()} ({days} days from now)",
                     )
                 )
-    for item_id in special_dependent:
-        s = next(x for x in savings if x.item_id == item_id)
-        row = rows[(item_id, s.cheapest_store)]
-        days = (row.special_end_date - as_of).days if row.special_end_date else None
-        flags.append(
-            PlannerFlag(
-                kind="special_dependency",
-                item_id=item_id,
-                store=s.cheapest_store,
-                ends_on=row.special_end_date,
-                ends_in_days=days,
-                message=f"the recommendation depends on {s.item_name} being on special at "
-                f"{s.cheapest_store.value} until "
-                f"{row.special_end_date.isoformat() if row.special_end_date else '?'}",
-            )
-        )
     return flags
 
 
@@ -537,12 +514,6 @@ def check_output(out: PlannerOutput, facts: PlannerFacts, tool_amounts: set[Deci
     v = facts.verdict
     problems = []
     differs = out.recommendation != v.kind
-    if facts.special_dependent and v.kind != "no_meaningful_difference" and not differs:
-        problems.append(
-            "the flags show the result depends on a special that ends soon, so you must "
-            "recommend no_meaningful_difference with overridden true and override_reason "
-            "special_dependency, and explain the special and its end date"
-        )
     if differs and out.override_reason is None:
         problems.append(
             f"your recommendation '{out.recommendation}' differs from rule_verdict '{v.kind}' but "
@@ -555,16 +526,19 @@ def check_output(out: PlannerOutput, facts: PlannerFacts, tool_amounts: set[Deci
         )
     if not differs and out.override_reason is not None:
         problems.append("override_reason must be null when you follow rule_verdict")
-    if out.override_reason == "special_dependency" and not facts.special_dependent:
-        problems.append(
-            "special_dependency is not allowed: the flags show no special the result depends on"
-        )
     if out.override_reason == "match_quality" and not facts.quality_issues:
         problems.append(
             "match_quality is not allowed: no item has a tier gap, pack gap, substitute or "
             "low confidence"
         )
 
+    if v.condition is not None and not out.overridden:
+        text = condition_date_text(v.condition.valid_until)
+        if text not in out.reasoning and v.condition.valid_until.isoformat() not in out.reasoning:
+            problems.append(
+                f"the verdict only holds until {text}, so the reasoning must say so, naming the "
+                f"date exactly as {text}, and what happens after it"
+            )
     if out.recommendation == "one_store" and out.store not in {v.cheapest_store.value}:
         problems.append(f"one_store must name the cheapest store '{v.cheapest_store.value}'")
     if out.recommendation == "split":
@@ -678,6 +652,11 @@ def model_input(facts: PlannerFacts) -> dict[str, Any]:
             "confidence": r.match_confidence,
             "bought": f"{r.purchased_qty.normalize():f} {r.pack_unit}",
             "on_special": r.on_special,
+            **(
+                {"regular_total_cost": format_money(r.regular_total_cost).removeprefix("$")}
+                if r.on_special
+                else {}
+            ),
         }
 
     return {
@@ -691,6 +670,7 @@ def model_input(facts: PlannerFacts) -> dict[str, Any]:
             "threshold": format_money(v.threshold).removeprefix("$"),
             "best_split_total": format_money(v.split_total).removeprefix("$"),
             "best_split_savings": format_money(v.split_savings).removeprefix("$"),
+            "condition": _condition_json(facts),
         },
         "top_item_savings": [
             {
@@ -735,6 +715,26 @@ def model_input(facts: PlannerFacts) -> dict[str, Any]:
     }
 
 
+def _condition_json(facts: PlannerFacts) -> dict[str, Any] | None:
+    c = facts.verdict.condition
+    if c is None:
+        return None
+    fb = c.fallback
+    return {
+        "valid_until": c.valid_until.isoformat(),
+        "valid_until_text": condition_date_text(c.valid_until),
+        "items_on_special": [{"item_id": i, "name": facts.names[i]} for i in c.items],
+        "fallback": {
+            "kind": fb.kind,
+            "store": fb.store.value if fb.store else None,
+            "totals": _money_map(fb.totals),
+            "gap": format_money(fb.gap).removeprefix("$"),
+            "threshold": format_money(fb.threshold).removeprefix("$"),
+            "best_split_savings": format_money(fb.split_savings).removeprefix("$"),
+        },
+    }
+
+
 # ---- summary line ----------------------------------------------------------------------------
 
 
@@ -744,20 +744,48 @@ def summary_line(
     split: SplitResult | None,
     override_reason: str | None = None,
 ) -> tuple[str, Decimal]:
-    """(text, savings) for the final recommendation, rendered from code numbers only. An
-    override adds why the verdict was held back."""
+    """(text, savings) for the final recommendation, rendered from code numbers only. A
+    conditional verdict says until when it holds and what follows; an override says why the
+    verdict was held back."""
     line, savings = _summary(facts, recommendation, split)
-    if override_reason == "special_dependency":
-        ends = sorted(
-            {f.ends_on.isoformat() for f in facts.flags if f.kind == "special_dependency"}
-        )
-        line = (
-            line.removesuffix(".")
-            + f", but the saving depends on a special ending {', '.join(ends)}."
-        )
-    elif override_reason == "match_quality":
+    if override_reason == "match_quality":
         line = line.removesuffix(".") + ", but the comparison is not like for like."
+    elif facts.verdict.condition is not None and recommendation == facts.verdict.kind:
+        line = _with_condition(facts, line, recommendation)
     return line, savings
+
+
+def _special_names(facts: PlannerFacts) -> str:
+    names = [facts.names[i] for i in facts.verdict.condition.items]
+    return " and ".join(names) + (" special" if len(names) == 1 else " specials")
+
+
+def _after(facts: PlannerFacts) -> str:
+    fb = facts.verdict.condition.fallback
+    if fb.kind == "one_store":
+        return f"shop at {fb.store.value.title()} ({format_money(fb.gap)} cheaper)"
+    if fb.kind == "split":
+        return f"a split saves {format_money(fb.split_savings)}"
+    return "no meaningful difference"
+
+
+def _with_condition(facts: PlannerFacts, line: str, recommendation: str) -> str:
+    c = facts.verdict.condition
+    v = facts.verdict
+    until = condition_date_text(c.valid_until)
+    names = _special_names(facts)
+    after = _after(facts)
+    if recommendation == "one_store":
+        return (
+            f"{v.cheapest_store.value.title()} is {format_money(v.gap)} cheaper if you shop by "
+            f"{until} ({names}); after that, {after}."
+        )
+    if recommendation == "split":
+        return line.removesuffix(".") + f" if you shop by {until} ({names}); after that, {after}."
+    return (
+        line.removesuffix(".")
+        + f", but only while the {names} lasts (to {until}); after that, {after}."
+    )
 
 
 def _summary(

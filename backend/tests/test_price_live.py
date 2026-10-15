@@ -1,7 +1,7 @@
 """Live runs of the price agent (real Gemini; needs SUPABASE_DB_URL for the dish cache). Run with:
     uv run pytest -m live -s tests/test_price_live.py
 The ingredient lists come from the Postgres dish cache, so after the first run they cost 0
-ingredient requests. Prices use the seed catalogue at a fixed anchor of 2026-10-12."""
+ingredient requests. Prices use the seed catalogue at a fixed anchor of 2026-10-14."""
 
 import os
 import time
@@ -25,7 +25,7 @@ from grocery_planner.tools.price_lookup import SeededFilePriceSource
 from tests.fixtures import PriceFixture, save_price_fixture
 
 pytestmark = pytest.mark.live
-AS_OF = date(2026, 10, 12)
+AS_OF = date(2026, 10, 14)
 CFG = PlannerConfig()
 
 

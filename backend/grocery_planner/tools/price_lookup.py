@@ -50,13 +50,26 @@ def _rank(
     return hits[: max(limit, 0)]
 
 
+SALE_WEEK_START = 2  # Wednesday (Monday is 0): Coles and Woolworths both reset specials then
+
+
+def sale_week_end(anchor: date, weeks: int = 1) -> date:
+    """The Tuesday a special ends. Sale weeks run Wednesday to Tuesday; the one containing
+    `anchor` starts on the last Wednesday on or before it. weeks=1 is that week's Tuesday,
+    weeks=2 the Tuesday after."""
+    if weeks < 1:
+        raise ValueError("special_weeks must be at least 1")
+    start = anchor - timedelta(days=(anchor.weekday() - SALE_WEEK_START) % 7)
+    return start + timedelta(days=6 + 7 * (weeks - 1))
+
+
 def resolve_seed_product(raw: dict, anchor: date) -> CatalogueProduct:
     """Turn a seed row's relative dates into real ones, relative to `anchor`."""
     row = dict(raw)
     age = row.pop("price_age_days")
-    ends_in = row.pop("special_ends_in_days")
+    weeks = row.pop("special_weeks", None)
     row["price_timestamp"] = datetime.combine(anchor - timedelta(days=age), time(), tzinfo=SYDNEY)
-    row["special_end_date"] = anchor + timedelta(days=ends_in) if ends_in is not None else None
+    row["special_end_date"] = sale_week_end(anchor, weeks) if weeks is not None else None
     return CatalogueProduct.model_validate(row)
 
 
@@ -80,8 +93,8 @@ class SeededFilePriceSource:
 
 _COLUMNS = (
     "store, product_id, product_name, brand, brand_label, category, search_terms, "
-    "pack_size, pack_unit, price, on_special, special_end_date, price_timestamp, "
-    "data_source, quality_band"
+    "pack_size, pack_unit, price, regular_price, on_special, special_end_date, "
+    "price_timestamp, data_source, quality_band"
 )
 
 

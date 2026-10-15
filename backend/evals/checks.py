@@ -370,6 +370,26 @@ def _pl_confidence(s: PlannerSubject, params: Any) -> list[Outcome]:
     ]
 
 
+def _pl_condition(s: PlannerSubject, params: Any) -> list[Outcome]:
+    """The verdict's condition (computed by code): None, or valid until a date with a fallback."""
+    c = s.result.rule_verdict.condition
+    if params is None:
+        return [_o("condition", c is None, "no condition" if c is None else f"condition {c}")]
+    if c is None:
+        return [_o("condition", False, f"no condition, want valid until {params['valid_until']}")]
+    ok = (
+        c.valid_until.isoformat() == params["valid_until"] and c.fallback.kind == params["fallback"]
+    )
+    return [
+        _o(
+            "condition",
+            ok,
+            f"valid until {c.valid_until}, then {c.fallback.kind}; want "
+            f"{params['valid_until']}, then {params['fallback']}",
+        )
+    ]
+
+
 def _pl_flags_include(s: PlannerSubject, params: list[str]) -> list[Outcome]:
     have = {f.kind for f in s.result.flags}
     missing = sorted(set(params) - have)
@@ -443,6 +463,13 @@ def _pl_implicit(s: PlannerSubject, params: dict[str, Any]) -> list[Outcome]:
     out.append(
         _o("tip_rules", not problems, "; ".join(problems) or f"{len(r.tips)} tips, all allowed")
     )
+    c = facts.verdict.condition
+    if c is not None and not r.overridden:
+        from grocery_planner.agents.planner import condition_date_text
+
+        text = condition_date_text(c.valid_until)
+        said = text in r.reasoning or c.valid_until.isoformat() in r.reasoning
+        out.append(_o("condition_explained", said, f"reasoning names {text}: {said}"))
     offered = facts.split.savings >= facts.verdict.threshold
     out.append(
         _o(
@@ -545,6 +572,7 @@ CHECKS: dict[str, dict[str, CheckFn]] = {
         "confidence": _pl_confidence,
         "flags_include": _pl_flags_include,
         "flags_exclude": _pl_flags_exclude,
+        "condition": _pl_condition,
         "recheck": _pl_recheck,
         "tool_called": _pl_tool_called,
         "split_assignment": _pl_split_assignment,
@@ -567,7 +595,11 @@ SHARED = {"max_calls"}  # accepted by every agent
 IMPLICIT_NAMES: dict[str, list[str]] = {
     "ingredient": ["brand_only_if_named", "unique_lines", "pantry_staples_respected"],
     "price": ["valid_product_ids", "rows_complete"],
-    "planner": ["no_invented_amounts", "tip_rules", "tool_only_when_split_can_win"],
+    "planner": [
+        "no_invented_amounts",
+        "tip_rules",
+        "tool_only_when_split_can_win",
+    ],  # + condition_explained when conditional
     "e2e": ["status", "within_call_budget"],
 }
 

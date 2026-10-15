@@ -1,5 +1,6 @@
 # DRAFT expected values, written from the seed catalogue (db/seed/price_catalogue.json) at the
-# fixed anchor 2026-10-12. "products" is the set of acceptable product ids for that store;
+# fixed anchor 2026-10-14 (a Wednesday; specials end Tue 2026-10-20, or Tue 2026-10-27 for
+# a second-week special). "products" is the set of acceptable product ids for that store;
 # "best_value" additionally requires the cheapest of those for the quantity needed.
 # Every case also gets: schema_valid, no_fallback, valid_product_ids, rows_complete.
 # Quantities are the total needed (grams, millilitres or count).
@@ -99,7 +100,7 @@
 - id: price-special-beats-house-brand
   agent: price
   notes: >
-    Edge case f and the weekend fries special: a branded product on special is cheaper than the
+    Edge case f (bacon, $7.00 regular) and the fries special (second sale week, $4.50 regular): a branded product on special is cheaper than the
     house brand at Coles, so it is the best value and is picked, with the on-special label. At
     Woolworths the house brand wins. The brand/house mix is a tier gap and must be flagged.
   input:
@@ -121,8 +122,8 @@
 - id: price-special-ending-soon
   agent: price
   notes: >
-    Edge case c: Woolworths chicken breast is on special until 2026-10-15 and is the best
-    value, so it is picked and carries its end date. Chicken thigh is a control with no special.
+    Edge case c: Woolworths chicken breast is on special (regular $11.50) until the end of the
+    sale week, 2026-10-20, and is the best value, so it is picked and carries its end date. Chicken thigh is a control with no special.
   input:
     items:
       - {name: chicken breast, quantity: 1000, unit: g}
@@ -132,7 +133,7 @@
     expect:
       chicken breast:
         coles: {products: [col-chicken-breast-01, col-chicken-breast-02], tiers: [equivalent], best_value: true, on_special: false}
-        woolworths: {products: [wol-chicken-breast-01], tiers: [equivalent], on_special: true, special_end: "2026-10-15"}
+        woolworths: {products: [wol-chicken-breast-01], tiers: [equivalent], on_special: true, special_end: "2026-10-20"}
       chicken thigh:
         coles: {products: [col-chicken-thigh-01], tiers: [equivalent], on_special: false}
         woolworths: {products: [wol-chicken-thigh-01], tiers: [equivalent], on_special: false}

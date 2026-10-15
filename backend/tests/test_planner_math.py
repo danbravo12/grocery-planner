@@ -306,15 +306,15 @@ def test_edge_c_special_ending_midweek_sets_special_flag():
     (s,) = per_item_savings(items, BOTH, AS_OF)
     assert s.cheapest_store == WOOL and s.costs == {COLES: D("11.00"), WOOL: D("8.50")}
     assert s.saving == D("2.50") and s.special_flag is True and s.tier_gap_flag is False
-    (after,) = per_item_savings(items, BOTH, AS_OF.replace(day=16))  # special has ended
+    (after,) = per_item_savings(items, BOTH, AS_OF.replace(day=21))  # special has ended
     assert after.special_flag is False
 
 
 def test_special_flag_needs_end_within_seven_days():
     items = [priced("chicken", COLES, "chicken breast", "col-chicken-breast-01"),
              priced("chicken", WOOL, "chicken breast", "wol-chicken-breast-01")]  # fmt: skip
-    assert per_item_savings(items, BOTH, AS_OF.replace(day=8))[0].special_flag is True  # exactly 7
-    assert per_item_savings(items, BOTH, AS_OF.replace(day=7))[0].special_flag is False  # 8 days
+    assert per_item_savings(items, BOTH, AS_OF.replace(day=13))[0].special_flag is True  # exactly 7
+    assert per_item_savings(items, BOTH, AS_OF.replace(day=12))[0].special_flag is False  # 8 days
 
 
 def test_edge_f_branded_special_beats_house_brand_with_tier_gap():

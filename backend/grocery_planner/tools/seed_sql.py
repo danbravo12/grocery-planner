@@ -16,8 +16,8 @@ from grocery_planner.tools.price_lookup import DEFAULT_SEED_PATH, load_seed_prod
 
 _COLUMNS = (
     "store, product_id, product_name, brand, brand_label, category, search_terms, "
-    "pack_size, pack_unit, price, on_special, special_end_date, price_timestamp, "
-    "data_source, quality_band"
+    "pack_size, pack_unit, price, regular_price, on_special, special_end_date, "
+    "price_timestamp, data_source, quality_band"
 )
 
 
@@ -37,6 +37,7 @@ def insert_sql(p: CatalogueProduct) -> str:
         str(p.pack_size),
         _q(p.pack_unit),
         str(p.price),
+        str(p.regular_price) if p.regular_price is not None else "NULL",
         "true" if p.on_special else "false",
         _q(p.special_end_date.isoformat()) if p.special_end_date else "NULL",
         _q(p.price_timestamp.isoformat()),
@@ -50,6 +51,7 @@ def insert_sql(p: CatalogueProduct) -> str:
         "brand_label = EXCLUDED.brand_label, category = EXCLUDED.category, "
         "search_terms = EXCLUDED.search_terms, pack_size = EXCLUDED.pack_size, "
         "pack_unit = EXCLUDED.pack_unit, price = EXCLUDED.price, "
+        "regular_price = EXCLUDED.regular_price, "
         "on_special = EXCLUDED.on_special, special_end_date = EXCLUDED.special_end_date, "
         "price_timestamp = EXCLUDED.price_timestamp, data_source = EXCLUDED.data_source, "
         "quality_band = EXCLUDED.quality_band;"

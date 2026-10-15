@@ -34,7 +34,7 @@ from grocery_planner.orchestrator import (
 from grocery_planner.tools.price_lookup import SeededFilePriceSource
 from tests.test_llm import FakeGenai, per_day, per_minute, text
 
-AS_OF = date(2026, 10, 12)
+AS_OF = date(2026, 10, 14)
 SOURCE = SeededFilePriceSource(anchor=AS_OF)
 COLES, WOOL = "coles", "woolworths"
 
@@ -155,7 +155,7 @@ def test_run_row_is_created_first_with_a_long_random_id_and_the_parameters_used(
         p["config"]["savings_threshold_dollars"] == "10"
         and p["config"]["stop_not_found_pct"] == "0.30"
     )
-    assert p["as_of"] == "2026-10-12" and p["bypass_cache"] is True and p["deadline_seconds"] == 180
+    assert p["as_of"] == "2026-10-14" and p["bypass_cache"] is True and p["deadline_seconds"] == 180
     assert p["stores"] == [COLES, WOOL] and set(p["prompt_versions"]) == {
         "ingredient",
         "price",
@@ -811,7 +811,7 @@ def test_cli_runs_a_request_file_and_prints_the_stored_run(tmp_path, capsys):
     path = tmp_path / "req.json"
     path.write_text(REQUEST.model_dump_json())
     runner, store = make_runner()
-    code = main(["run", str(path), "--memory", "--as-of", "2026-10-12"], lambda args, as_of: runner)
+    code = main(["run", str(path), "--memory", "--as-of", "2026-10-14"], lambda args, as_of: runner)
     out = capsys.readouterr().out
     assert code == 0
     for heading in ("SHOPPING LIST", "PER-STORE COMPARISON", "RECOMMENDATION", "STEPS"):

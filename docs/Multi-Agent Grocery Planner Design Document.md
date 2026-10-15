@@ -82,7 +82,7 @@ This agent finds a comparable product for each purchasable item at each store an
 
 **Input:** the purchasable items list and the stores to check.
 
-**Tool:** one price lookup that returns candidate products for a search term. At first it reads a seeded catalogue of about 100 ingredients. It returns the same fields a live source would, including a price timestamp, so swapping sources later is a config change. Seeded specials and price ages are stored relative to an anchor date (default: today), so specials never go stale.
+**Tool:** one price lookup that returns candidate products for a search term. At first it reads a seeded catalogue of about 100 ingredients. It returns the same fields a live source would, including a price timestamp, so swapping sources later is a config change. Seeded specials and price ages are stored relative to an anchor date (default: today), so specials never go stale. **Specials run Wednesday to Tuesday**, as at Coles and Woolworths: a seeded special says which sale week it ends in (`special_weeks`: 1 is the Tuesday ending the week that contains the anchor, 2 the Tuesday after), and every special carries a `regular_price`, the shelf price once it is over (validated to be higher than the special price).
 
 **Flow:** code pre-fetches up to five candidates per item per store (only the named brand when the user named one) and computes packs, purchased quantity, leftover, total cost, unit price and whether a special is active. One batched model call then picks a candidate per item per store, or none, with a tier and confidence. Code enforces the tier rules afterwards, downgrading and flagging any pick that breaks them. If a store had no usable pick and the model suggested search terms, there is one retry round (a single extra model call). The planner's loop-back reuses the same machinery.
 
@@ -114,9 +114,9 @@ This agent finds a comparable product for each purchasable item at each store an
 
 **Cost basis:** the cost of the packs actually bought, not a prorated amount. Leftover quantity is noted but not credited.
 
-**Output per item per store:** product name, brand label, pack size, price, unit price, special (yes or no and end date), packs needed, total cost, match tier, match confidence, status, price timestamp, and `data_source` (seeded for now).
+**Output per item per store:** product name, brand label, pack size, price, unit price, special (yes or no and end date), regular price, packs needed, total cost, regular total cost (the same packs at the regular price; equal to the total cost when not on special), match tier, match confidence, status, price timestamp, and `data_source` (seeded for now).
 
-**Seeded edge cases for evals:** an item missing at one store, mismatched pack sizes, a special ending mid-week, and a near-identical basket total.
+**Seeded edge cases for evals:** an item missing at one store, mismatched pack sizes, a special ending at the end of the sale week, and a near-identical basket total.
 
 ## Planner agent
 
@@ -130,9 +130,11 @@ This agent decides where it is worth shopping this week based on savings alone. 
 - Per-item savings between stores
 - What-if split totals, e.g. "meat from store B, everything else from store A" (the one tool the agent can call itself)
 
-**Decision rule:** one threshold applies to every outcome: $8 or 8% of the basket, whichever is higher, set in config. A split only wins if its savings meet the threshold after accounting for the extra trip. Otherwise one store wins if its lead over the next cheapest store meets the threshold, and anything less is no meaningful difference. Code computes this rule verdict, and the agent follows it unless it states an override reason. If one store is cheaper overall but another is cheaper on one expensive item, the agent only recommends a split when it clears the threshold, and otherwise mentions the item as a tip.
+**Decision rule:** one threshold applies to every outcome: $8 or 8% of the basket, whichever is higher, set in config. A split only wins if its savings meet the threshold after accounting for the extra trip. Otherwise one store wins if its lead over the next cheapest store meets the threshold, and anything less is no meaningful difference. Code computes this rule verdict, and the agent follows it. The only override reason is doubtful matches (`match_quality`).
 
-**Checks on the agent's output:** a recommendation that differs from the rule verdict needs an override reason (a special the result depends on, or doubtful matches); a result that depends on a special ending within a week must be overridden to no meaningful difference; a split is recomputed by code and must meet the threshold; tips are limited to items whose store difference is at least a quarter of the threshold, must give the end date when they mention a special, and assumptions may only cover data and pricing, never the shopper's preferences; every dollar figure in the text must equal a number code provided or a tool returned. Anything else goes back to the agent for one repair.
+**Conditional verdict:** code computes the verdict twice, at current prices and with every pick on special put back to its regular price. If the two recommendations differ, the verdict stays the current-price one and carries a condition: `valid_until` (the earliest end date among the specials that change the outcome, tried one at a time, or all of them together if none does alone), `items` (those items) and `fallback` (the regular-price verdict with its numbers). If they agree, the condition is null. The agent does not override for a special: it follows the verdict and explains the condition, and the summary line states it, for example "Woolworths is $11.40 cheaper if you shop by Tue 20 Oct (beef mince special); after that, no meaningful difference." If one store is cheaper overall but another is cheaper on one expensive item, the agent only recommends a split when it clears the threshold, and otherwise mentions the item as a tip.
+
+**Checks on the agent's output:** a recommendation that differs from the rule verdict needs the override reason `match_quality` (doubtful matches); when the verdict has a condition, the reasoning must state the date it holds until; a split is recomputed by code and must meet the threshold; tips are limited to items whose store difference is at least a quarter of the threshold, must give the end date when they mention a special, and assumptions may only cover data and pricing, never the shopper's preferences; every dollar figure in the text must equal a number code provided or a tool returned. Anything else goes back to the agent for one repair.
 
 **Incomplete baskets:** if a store lacks a few items, the planner compares on common items and flags the gap.
 
@@ -141,7 +143,7 @@ This agent decides where it is worth shopping this week based on savings alone. 
 - `recommendation`: one\_store (which), split (which items where), or no\_meaningful\_difference
 - `savings` and `reasoning` in plain language; a one-line summary is rendered by code from the numbers
 - `confidence`, computed by code from the share of comparable items, match confidence and tier or pack gaps (the agent does not set it)
-- `flags[]`: items missing at a store, specials ending within 7 days (information), specials the result depends on, substitute matches, tier and pack gaps
+- `flags[]`: items missing at a store, specials ending within 7 days (information, with each end date), substitute matches, tier and pack gaps
 - `assumptions[]`
 
 **Loop-back:** the planner may send low-confidence items back to the price agent once. After that it must decide with what it has.
@@ -227,16 +229,16 @@ Tracing shows what each run did, and evals show whether a prompt or model change
 - Run summaries and parameters live in the `runs` table, with the Langfuse trace ID stored on each run so the two link up. Langfuse keeps 30 days; the `run_steps` records are the permanent record.
 - The public "how it worked" panel reads from the app's own `run_steps` records, not from Langfuse, so it works on shared links without exposing the tracing account.
 
-**Evals:** 37 cases in `backend/evals/cases/*.yaml`, split by agent. Each case has an id, the agent, an input, a set of checks and a note on why it exists. **Every check is deterministic; there is no LLM judge yet.** A judge is a later addition if a fuzzy question (for example whether a potato salad list is sensible) turns out to matter.
+**Evals:** 39 cases in `backend/evals/cases/*.yaml`, split by agent. Each case has an id, the agent, an input, a set of checks and a note on why it exists. **Every check is deterministic; there is no LLM judge yet.** A judge is a later addition if a fuzzy question (for example whether a potato salad list is sensible) turns out to matter.
 
 | Agent | Cases | What is checked | Method |
 | --- | ---: | --- | --- |
 | Ingredient | 12 | Required vocabulary items present (any-of groups allowed); per-serving quantity inside a range per item; forbidden items absent for each avoid (word lists, so coconut milk is not dairy); a brand only when the dish names one; merged lines list every meal that uses them; schema valid; one request | Checks on the typed output. Cases include classic dishes, a shared-ingredient merge, avoid dairy, nuts and gluten, a contradiction (creamy and dairy-free), an odd dish name and a prompt-injection dish name |
 | Price | 12 | Product is in the allowed set for that store; tier is one of the allowed tiers; `not_found` where the seed lacks the product; exact for a named brand; `pack_gap` raised or absent as designed; the special is picked when it is the best value; best value among the acceptable products; pack counts; at most two requests; downgrades counted | Checks against the seeded catalogue. The input is a fixed ingredient list |
-| Planner | 10 | Recommendation, store, override and its reason (`special_dependency`, `match_quality`); every dollar figure in the text is a number code provided or a tool returned; tip rules; confidence level; the what-if tool is only called when a split can win | Checks against the saved price-agent fixtures and constructed baskets. Code fixes the rule verdict, confidence and flags, so those are asserted offline as well |
-| End to end | 3 | The run completes, within the 9-request budget, with the expected recommendation | Full orchestrator runs |
+| Planner | 11 | Recommendation, store, override and its reason (`match_quality`), the verdict's condition (valid until, fallback) and that the reasoning states it; every dollar figure in the text is a number code provided or a tool returned; tip rules; confidence level; the what-if tool is only called when a split can win | Checks against the saved price-agent fixtures and constructed baskets. Code fixes the rule verdict, confidence and flags, so those are asserted offline as well |
+| End to end | 4 | The run completes within the 9-call budget with the expected recommendation, or (the stopped-run case) stops with the ingredient list kept, a user message and no planner step | Full orchestrator runs |
 
-**How a run is made reproducible:** the runner uses the eval API key (`GEMINI_EVAL_API_KEY`, never the demo's), `APP_ENV=eval`, `bypass_cache=True` (nothing read from or written to the dish cache), the fallback model switched off so one pinned model answers (a case fails if anything else did), and a fixed `as_of` of 2026-10-12 so seeded specials and ages never drift. Temperature stays at the agents' 0.1, so a case can pass in one run and fail in the next; `--repeat N` measures that.
+**How a run is made reproducible:** the runner uses the eval API key (`GEMINI_EVAL_API_KEY`, never the demo's), `APP_ENV=eval`, `bypass_cache=True` (nothing read from or written to the dish cache), the fallback model switched off so one pinned model answers (a case fails if anything else did), and a fixed `as_of` of 2026-10-14 (a Wednesday, the first day of a sale week) so seeded specials and ages never drift. Temperature stays at the agents' 0.1, so a case can pass in one run and fail in the next; `--repeat N` measures that.
 
 **What counts as a request:** checks count model behaviour, not infrastructure. A case's call limit counts first calls and tool rounds; repairs are counted and reported next to it, and the end-to-end budget (9) counts repairs too. Transport retries (5xx, timeouts, per-minute 429s) are reported per case and per run but never fail a case. A case lost to such an error after its retries is not scored (it is listed, and a run with more than 25% of an agent's runs lost this way fails the gate as untrustworthy). A per-day 429 stops the whole run with a clear quota status (exit code 3) and nothing is graded.
 
@@ -291,6 +293,8 @@ Every parameter has a default and a clamped range, and the values used are store
 | Include pantry staples | Off | On or off | Yes |
 | Model | Gemini 3.1 Flash-Lite, free tier | Swappable | No |
 | Daily budget | 70% of 500 requests/day = 350 requests | Fixed | No |
+| Sale week | Specials run Wednesday to Tuesday; seeded `special_weeks` 1 or 2 resolves to the Tuesday ending the sale week that contains the anchor, or the next | Fixed | No |
+| Eval anchor | 2026-10-14 (Wednesday) for evals and tests; the app uses today in Sydney | Fixed | No |
 | Daily reset boundary | Midnight Pacific time, matching Google's quota reset | Fixed | No |
 | In-flight buffer | 15% of the daily budget: new runs are admitted up to 298 requests, in-flight runs can reach 350 | Fixed | No |
 | Fallback model budget | Its own counter, same 350 limit; switched off for the day when used up | Fixed | No |

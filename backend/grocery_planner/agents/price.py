@@ -503,6 +503,7 @@ def _priced(st: _State, store: Store, as_of: date) -> PricedItem:
     if pick.candidate is None:
         return PricedItem(**base)
     p = pick.candidate.product
+    regular = p.regular_price if p.regular_price is not None else p.price
     return PricedItem(
         **base,
         product_id=p.product_id,
@@ -512,6 +513,7 @@ def _priced(st: _State, store: Store, as_of: date) -> PricedItem:
         pack_size=p.pack_size,
         pack_unit=p.pack_unit,
         price=p.price,
+        regular_price=regular,
         unit_price=p.unit_price,
         on_special=p.on_special,
         special_end_date=p.special_end_date,
@@ -519,6 +521,7 @@ def _priced(st: _State, store: Store, as_of: date) -> PricedItem:
         purchased_qty=pick.candidate.purchased_qty,
         leftover_qty=pick.candidate.leftover_qty,
         total_cost=pick.candidate.total_cost,
+        regular_total_cost=regular * pick.candidate.packs,
         price_timestamp=p.price_timestamp,
         data_source=p.data_source,
     )
