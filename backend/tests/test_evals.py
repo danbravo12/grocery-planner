@@ -42,7 +42,7 @@ def of(agent: str) -> list[Case]:
 def test_case_set_has_the_planned_shape():
     assert 30 <= len(CASES) <= 40
     counts = {a: len(of(a)) for a in AGENTS}
-    assert counts == {"ingredient": 12, "price": 12, "planner": 10, "e2e": 3}
+    assert counts == {"ingredient": 12, "price": 12, "planner": 10, "e2e": 4}
     assert all(c.notes.strip() for c in CASES)  # each case says why it exists
 
 
@@ -97,7 +97,7 @@ def test_planner_expectations_that_code_decides_hold_for_the_inputs():
             assert facts.quality_issues, c.id
         if k.get("store"):
             assert facts.verdict.store.value == k["store"], c.id
-        for name, store in k.get("split_assignment", {}).items():
+        for name, store in k.get("split_assignment", {}).get("items", {}).items():
             item_id = next(r.item_id for r in rows if r.item_name == name)
             assert facts.verdict.assignment[item_id].value == store, c.id
 
@@ -526,3 +526,82 @@ def test_report_shows_repairs_retries_downgrade_kinds_and_a_quota_banner():
     md = render_markdown(meta, summary, [], None, rows)
     assert "QUOTA: the run stopped early" in md and "2 of 5 case runs" in md
     assert "NOT GRADED" in md and "different_food: 1" in md and "| price | 2 | 1 | 2 |" in md
+
+
+# ---- split resulting stores, and the stopped run ------------------------------------------------
+
+
+def test_split_case_compares_the_resulting_store_per_item():
+    from grocery_planner.agents.planner import Assign
+
+    case = BY_ID["pl-split-wins"]
+    facts = build_facts(*build_rows(case.input["build"])[:1], ACTIVE_STORES, PlannerConfig(),
+                        build_rows(case.input["build"])[1])  # fmt: skip
+
+    def run(assignment):
+        out = PlannerOutput(
+            recommendation="split", overridden=False,
+            reasoning="Buying the beef mince at Woolworths clears the threshold.",
+            split_assignment=assignment,
+        )  # fmt: skip
+        fake = FakeLLMClient([out])
+        return run_case(case, lambda meter, hooks: _hooked(fake, meter), 1)
+
+    mince = next(
+        r.item_id for r in build_rows(case.input["build"])[0] if r.item_name == "beef mince"
+    )
+    cheapest = facts.split.cheapest_single_store.value
+    # any format that results in the same stores passes: item key, category key, or omitted
+    for assignment in ([Assign(key=mince, store="woolworths")], None):
+        r = run(assignment)
+        assert not [o for o in r.outcomes if o["name"] == "split_assignment" and not o["passed"]]
+    assert cheapest == "coles"
+    # moving one more item away from the cheapest store breaks "everything else"
+    other = next(i for i in facts.names if i != mince)
+    r = run([Assign(key=mince, store="woolworths"), Assign(key=other, store="woolworths")])
+    assert [o["name"] for o in r.outcomes if not o["passed"]] == ["split_assignment"]
+
+
+def stopped_run_script():
+    from grocery_planner.agents.price import ItemOut, MatchBatch, PickOut
+
+    ingredients = batch(
+        dish("d1", ing("dragon fruit", 100, in_vocab=False)),
+        dish("d2", ing("saffron", 1, in_vocab=False)),
+        dish("d3", ing("kangaroo", 150, in_vocab=False)),
+    )
+    nothing = [
+        PickOut(store=s.value, candidate_id=None, tier="not_found", confidence="low", reason="none")
+        for s in ACTIVE_STORES
+    ]
+    prices = MatchBatch(items=[ItemOut(item_id=f"i{n}", picks=nothing) for n in (1, 2, 3)])
+    return ingredients, prices
+
+
+def test_stopped_run_case_passes_when_the_run_stops_and_fails_when_it_does_not():
+    case = BY_ID["e2e-stopped-run"]
+    ingredients, prices = stopped_run_script()
+    fake = FakeLLMClient([ingredients, prices])
+    r = run_case(case, lambda meter, hooks: _hooked(fake, meter), 1)
+    assert r.passed, [o for o in r.outcomes if not o["passed"]]
+    names = {o["name"] for o in r.outcomes}
+    assert {
+        "status",
+        "stop_reason",
+        "ingredient_list_kept",
+        "user_message",
+        "planner_not_run",
+    } <= names
+    assert fake.script == [] and len(fake.calls) == 2  # the planner was never asked
+
+
+def test_stopped_run_input_is_a_valid_request_and_mostly_outside_the_catalogue():
+    from grocery_planner.tools.vocabulary import ingredient_vocabulary
+
+    case = BY_ID["e2e-stopped-run"]
+    dishes = case.input["meals"][0]["mains"]
+    assert dishes == ["dragon fruit salad", "saffron risotto", "kangaroo steaks"]
+    vocab = ingredient_vocabulary()
+    for word in ("dragon fruit", "saffron", "kangaroo"):
+        assert not any(word in name for name in vocab)
+    assert case.checks["status"] == "stopped" and case.checks["stopped_cleanly"] is True

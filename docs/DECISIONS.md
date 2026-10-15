@@ -283,3 +283,10 @@ The live re-run (two models, 3 repeats) was dropped from this step by decision; 
 - Tests: penne in gluten-free bolognese is repaired, a second violation fails, each category forbids its items and spares a near miss, the avoid text is normalised, unknown avoid is logged and unchecked, a cached violating dish is a miss.
 ### Not done
 - Section 4 (live re-run on both models) was skipped by decision. Nothing was pushed either: a push to `main` touching `backend/evals` would start the evals workflow, which you asked not to trigger. The commit is local; push when you are ready.
+
+### Eval case fixes (11b follow-up)
+- `*.swp` is git-ignored; no swap file was tracked or present (checked `git ls-files`).
+- `pl-split-wins` now compares where each item ends up: `split_assignment: {items: {beef mince: woolworths}, others: cheapest_single_store}`. The check reads the result's per-item store map (code expands whatever format the model used, item or category keys, or none) and requires every other common item at the basket's cheapest single store.
+- Price retry round: the retry already searched with the item's brand (`find_candidates` passes `item.brand` for every term); what was missing was a test. Two tests now spy on every catalogue search: Heinz tomato sauce is only ever searched with `brand="Heinz"`, including the retry terms, and never reaches the model with another brand; a Bellvue item stays Bellvue through a real retry round. No code change.
+- New case `e2e-stopped-run` (dragon fruit salad, saffron risotto, kangaroo steaks): expects status `stopped` with reason `too_many_unmatched` or `not_comparable`, the ingredient list kept, a user message, a recorded stop step and no planner output or planner step, at most 4 model calls. The e2e implicit check `completed` became `status` (completed unless the case says otherwise). Checked offline with a scripted model (all items not found), not live; the live outcome (a model may find a substitute for one item) is not yet known. The set is now 38 cases (e2e 4).
+- `price-named-brand-not-sold` (not_found only) and all equivalent/allowed sets are unchanged.

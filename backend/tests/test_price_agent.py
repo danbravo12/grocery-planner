@@ -504,3 +504,49 @@ def test_same_food_helper():
     assert same_food("milk", "col-milk-02") and not same_food("milk", "col-coconut-milk-01")
     assert not same_food("potato gems", "wol-hash-browns-01")
     assert same_food("anything", "not-in-the-catalogue")  # unknown ids are not judged
+
+
+# ---- a named brand survives the retry round --------------------------------------------------
+
+
+def test_named_brand_keeps_its_filter_in_every_search_including_the_retry():
+    class Spy:
+        def __init__(self):
+            self.calls = []
+
+        def search(self, term, store, limit, brand=None):
+            self.calls.append((term, store, brand))
+            return SOURCE.search(term, store, limit, brand)
+
+    spy = Spy()
+    items = [item("i1", "tomato sauce", 500, "ml", brand="Heinz")]
+    # the model asks for a retry with a plain term that would find Coles and Bellvue sauce
+    first = batch(entry("i1", None, None, retry=["tomato sauce", "ketchup"]))
+    fake = FakeLLMClient([first])
+    result = price_items(items, fake, spy, CFG, AS_OF)
+    assert all(brand == "Heinz" for _, _, brand in spy.calls) and len(spy.calls) > 2
+    assert len(fake.calls) == 1  # nothing new found, so no second request
+    assert [r.match_tier for r in result.items] == ["not_found", "not_found"]
+    # and the candidates sent to the model never include another brand
+    assert all(
+        not c for it in payload(fake)["items"] for c in it["stores"].values()
+    )  # fmt: skip
+
+
+def test_retry_round_searches_with_the_brand_even_when_candidates_are_found():
+    seen = []
+
+    class Spy:
+        def search(self, term, store, limit, brand=None):
+            found = SOURCE.search(term, store, limit, brand)
+            seen.append((term, brand, [p.brand for p in found]))
+            return found
+
+    items = [item("i1", "tomato sauce", 500, "ml", brand="Bellvue")]
+    first = batch(entry("i1", ("col-tomato-sauce-02", "exact"), None, retry=["ketchup", "sauce"]))
+    second = batch(entry("i1", None, ("wol-tomato-sauce-02", "exact")))
+    fake = FakeLLMClient([first, second])
+    result = price_items(items, fake, Spy(), CFG, AS_OF)
+    assert len(seen) > 2 and all(brand == "Bellvue" for _, brand, _ in seen)
+    assert all(set(brands) <= {"Bellvue"} for _, _, brands in seen)
+    assert {r.brand for r in result.items if r.brand} == {"Bellvue"}

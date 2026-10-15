@@ -392,16 +392,25 @@ def _pl_tool_called(s: PlannerSubject, params: bool) -> list[Outcome]:
     return [_o("tool_called", called == params, f"tool called={called}, want {params}")]
 
 
-def _pl_split_assignment(s: PlannerSubject, params: dict[str, str]) -> list[Outcome]:
+def _pl_split_assignment(s: PlannerSubject, params: dict[str, Any]) -> list[Outcome]:
+    """Compare the resulting store per item, whatever format the assignment was given in:
+    `items` names where specific items end up, `others` where every other common item must be
+    (`cheapest_single_store` is the store code says is cheapest for the whole basket)."""
     ids = {r.item_name: r.item_id for r in s.rows}
+    resulting = {i: st.value for i, st in (s.result.split_assignment or {}).items()}
     out = []
-    for name, store in params.items():
-        got = (s.result.split_assignment or {}).get(ids[name])
+    named = {ids[name]: store for name, store in params.get("items", {}).items()}
+    for name, store in params.get("items", {}).items():
+        got = resulting.get(ids[name])
+        out.append(_o("split_assignment", got == store, f"{name}: {got}, want {store}"))
+    if params.get("others") == "cheapest_single_store":
+        cheapest = s.facts.split.cheapest_single_store.value
+        wrong = {i: st for i, st in resulting.items() if i not in named and st != cheapest}
         out.append(
             _o(
                 "split_assignment",
-                got and got.value == store,
-                f"{name}: {got.value if got else None}, want {store}",
+                not wrong and bool(resulting),
+                f"every other item at {cheapest}" if not wrong else f"not at {cheapest}: {wrong}",
             )
         )
     return out
@@ -459,15 +468,55 @@ def _e2e_min_items(s: E2ESubject, params: int) -> list[Outcome]:
     return [_o("min_items", n >= params, f"{n} items, want >= {params}")]
 
 
-def _e2e_implicit(s: E2ESubject, params: dict[str, Any]) -> list[Outcome]:
+def _e2e_status(s: E2ESubject, params: Any) -> list[Outcome]:
     r = s.run
+    why = r.failure_reason or r.stop_reason
+    return [_o("status", r.status == params, f"status {r.status}" + (f" ({why})" if why else ""))]
+
+
+def _e2e_stop_reason(s: E2ESubject, params: Any) -> list[Outcome]:
     return [
         _o(
-            "completed",
-            r.status == "completed",
-            f"status {r.status}"
-            + (f" ({r.failure_reason or r.stop_reason})" if r.status != "completed" else ""),
+            "stop_reason",
+            s.run.stop_reason in _as_list(params),
+            f"{s.run.stop_reason}, want {params}",
+        )
+    ]
+
+
+def _e2e_stopped_cleanly(s: E2ESubject, params: Any) -> list[Outcome]:
+    """A stopped run keeps the ingredient list, tells the user why, and never runs the planner."""
+    r = s.run
+    kept = len((r.ingredient_output or {}).get("items", [])) > 0
+    planner_steps = [x.name for x in s.steps if x.name in ("planner", "reprice", "planner_2")]
+    stop_steps = [x for x in s.steps if x.name == "stop"]
+    return [
+        _o("ingredient_list_kept", kept, "list kept" if kept else "no ingredient list on the run"),
+        _o(
+            "user_message",
+            bool((r.user_message or "").strip()),
+            (r.user_message or "no message")[:120],
         ),
+        _o(
+            "planner_not_run",
+            r.planner_output is None and not planner_steps,
+            f"planner output {r.planner_output is not None}, steps {planner_steps}",
+        ),
+        _o("stop_step_recorded", len(stop_steps) == 1, f"{len(stop_steps)} stop step(s)"),
+    ]
+
+
+def _e2e_implicit(s: E2ESubject, params: dict[str, Any]) -> list[Outcome]:
+    if "status" in params:  # the case states the status it expects
+        return []
+    r = s.run
+    why = r.failure_reason or r.stop_reason
+    return [
+        _o(
+            "status",
+            r.status == "completed",
+            f"status {r.status}" + (f" ({why})" if r.status != "completed" else ""),
+        )
     ]
 
 
@@ -500,7 +549,13 @@ CHECKS: dict[str, dict[str, CheckFn]] = {
         "tool_called": _pl_tool_called,
         "split_assignment": _pl_split_assignment,
     },
-    "e2e": {"recommendation": _e2e_rec, "min_items": _e2e_min_items},
+    "e2e": {
+        "recommendation": _e2e_rec,
+        "min_items": _e2e_min_items,
+        "status": _e2e_status,
+        "stop_reason": _e2e_stop_reason,
+        "stopped_cleanly": _e2e_stopped_cleanly,
+    },
 }
 IMPLICIT = {
     "ingredient": _ing_implicit,
@@ -513,7 +568,7 @@ IMPLICIT_NAMES: dict[str, list[str]] = {
     "ingredient": ["brand_only_if_named", "unique_lines", "pantry_staples_respected"],
     "price": ["valid_product_ids", "rows_complete"],
     "planner": ["no_invented_amounts", "tip_rules", "tool_only_when_split_can_win"],
-    "e2e": ["completed", "within_call_budget"],
+    "e2e": ["status", "within_call_budget"],
 }
 
 

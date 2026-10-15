@@ -42,3 +42,20 @@
     max_calls: 9
     min_items: 8
     recommendation: [no_meaningful_difference]
+
+- id: e2e-stopped-run
+  agent: e2e
+  notes: >
+    Dishes the catalogue mostly cannot supply (dragon fruit, saffron, kangaroo). Too few items
+    can be compared, so the run must stop rather than recommend: status stopped with a reason,
+    the ingredient list kept, a message for the user and no planner step. Whether the model
+    finds a substitute for one of the items is not asserted, only that the run ends this way.
+  input:
+    meals:
+      - {meal_name: Exotic night, mains: [dragon fruit salad, saffron risotto, kangaroo steaks], people: 2, days: 1}
+  checks:
+    max_calls: 4
+    status: stopped
+    stop_reason: [too_many_unmatched, not_comparable]
+    stopped_cleanly: true
+    min_items: 3
