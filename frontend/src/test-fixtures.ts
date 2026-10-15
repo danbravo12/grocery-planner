@@ -89,6 +89,7 @@ export function run(over: Partial<RunView> = {}): RunView {
     recommendation: recommendation(),
     totals: {
       requests: 3,
+      request_budget: 9,
       tokens_in: 5000,
       tokens_out: 900,
       thinking_tokens: 0,

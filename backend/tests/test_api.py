@@ -209,12 +209,15 @@ def test_post_returns_202_then_events_stream_to_run_completed_and_get_matches():
         assert set(view["comparison"][0]["stores"]) == {"coles", "woolworths"}
         assert view["request"]["meals"][0]["meal_name"] == "Brekky"
         assert view["totals"]["requests"] == 3 and view["totals"]["models"] == ["fake-model"]
+        assert view["totals"]["request_budget"] == 9  # the reservation: worst case for a run
         assert view["totals"]["would_cost_usd"] is not None
         assert "condition" in view["recommendation"]["rule_verdict"]
         steps = client.get(f"/api/runs/{run_id}/steps").json()["steps"]
         assert [s["name"] for s in steps] == ["ingredient", "price", "planner"]
         assert all(s["status"] == "completed" and s["model"] == "fake-model" for s in steps)
         assert steps[0]["output"]["items"] == 2 and steps[2]["output"]["confidence"]
+        assert steps[0]["output"]["cache_hits"] == 0 and steps[0]["output"]["cache_misses"] == 1
+        assert steps[1]["output"]["downgrades"] == [] and steps[1]["output"]["rounds"] == 1
     assert store.runs[run_id].status == "completed"
 
 

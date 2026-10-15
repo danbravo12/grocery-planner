@@ -1,39 +1,86 @@
-// Drives the real app in a browser and saves screenshots of the form, the progress view and the
-// result, on a desktop and a phone-sized viewport:
-//   node scripts/screenshots.mjs http://localhost:8765 ../docs/screenshots
-// It makes real plans (two runs), so use it against a local server you are happy to spend quota on.
+// Saves screenshots of the real app (served by FastAPI) for existing runs:
+//   node scripts/screenshots.mjs <base-url> <out-dir> <conditional-run-id> <split-run-id>
+// No new plans are made. The unavailable screen is shown by mocking /api/availability.
 import { mkdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { chromium } from '@playwright/test'
 
-const base = process.argv[2] ?? 'http://localhost:8000'
-const out = resolve(process.argv[3] ?? '../docs/screenshots')
+const [base = 'http://localhost:8000', outArg = '../docs/screenshots', conditional, split] = process.argv.slice(2)
+if (!conditional || !split) {
+  console.error('usage: screenshots.mjs <base-url> <out-dir> <conditional-run-id> <split-run-id>')
+  process.exit(1)
+}
+const out = resolve(outArg)
 mkdirSync(out, { recursive: true })
 
 const browser = await chromium.launch({ channel: process.env.CI ? undefined : 'chrome' })
-const sizes = [
-  ['desktop', { width: 1280, height: 900 }],
-  ['mobile', { width: 390, height: 844 }],
-]
+const desktop = { width: 1280, height: 900 }
+const phone = { width: 390, height: 844 }
+const open = async (viewport, scale = 1) => (await browser.newContext({ viewport, deviceScaleFactor: scale })).newPage()
+const shot = (page, name, options = {}) => page.screenshot({ path: join(out, name), ...options })
 
-for (const [name, viewport] of sizes) {
-  const page = await (await browser.newContext({ viewport, deviceScaleFactor: name === 'mobile' ? 2 : 1 })).newPage()
-  await page.goto(base)
-  await page.getByLabel('Meal name').fill('Friday dinner')
-  await page.getByLabel('Mains 1').fill('fillet mignon')
-  await page.getByRole('button', { name: '+ Add a side' }).click()
-  await page.getByLabel('Sides 1').fill('potato salad')
-  await page.getByRole('button', { name: '+ Add a side' }).click()
-  await page.getByLabel('Sides 2').fill('fries')
-  await page.screenshot({ path: join(out, `${name}-1-form.png`), fullPage: true })
+// the form with the examples
+let page = await open(desktop)
+await page.goto(base)
+await page.getByRole('heading', { name: 'Try an example' }).waitFor()
+await page.getByRole('button', { name: /Lamb and pork weekend/ }).click()
+await shot(page, 'desktop-1-form.png', { fullPage: true })
 
-  await page.getByRole('button', { name: 'Make my plan' }).click()
-  await page.getByRole('heading', { name: 'Making your plan' }).waitFor({ timeout: 60_000 })
-  await page.screenshot({ path: join(out, `${name}-2-progress.png`) })
+// the result hero, conditional verdict, desktop and phone
+page = await open(desktop)
+await page.goto(`${base}/runs/${conditional}`)
+await page.getByRole('heading', { level: 1 }).first().waitFor()
+await page.waitForTimeout(400)
+await shot(page, 'desktop-hero-conditional.png')
+page = await open(phone, 2)
+await page.goto(`${base}/runs/${conditional}`)
+await page.getByRole('heading', { level: 1 }).first().waitFor()
+await page.waitForTimeout(400)
+await shot(page, 'mobile-hero-conditional.png')
 
-  await page.getByRole('heading', { level: 1 }).filter({ hasNotText: 'Making your plan' }).waitFor({ timeout: 120_000 })
-  await page.waitForTimeout(500)
-  await page.screenshot({ path: join(out, `${name}-3-result.png`), fullPage: true })
-  console.log(name, page.url())
-}
+// a split result, whole page, then the trace panel expanded
+page = await open(desktop)
+await page.goto(`${base}/runs/${split}`)
+await page.getByRole('heading', { level: 1 }).first().waitFor()
+await page.waitForTimeout(400)
+await shot(page, 'desktop-split-result.png', { fullPage: true })
+const trace = page.locator('details', { has: page.getByText('How it worked', { exact: true }) }).first()
+await page.getByText('How it worked', { exact: true }).click()
+await page.getByText(/1\. Ingredient agent/).waitFor()
+await page.getByText(/1\. Ingredient agent/).click()
+await page.getByText(/2\. Price agent/).click()
+await page.getByText(/3\. Planner/).click()
+await page.waitForTimeout(300)
+await trace.scrollIntoViewIfNeeded()
+await trace.screenshot({ path: join(out, 'desktop-trace-panel.png') })
+
+// the unavailable screen (availability mocked as used up)
+page = await open(desktop)
+await page.route('**/api/availability', (route) =>
+  route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({
+      available: false, reason: 'day_budget', message: 'used up',
+      reset_at_utc: new Date(Date.now() + 5 * 3600_000).toISOString(),
+      reset_at_sydney: new Date(Date.now() + 5 * 3600_000).toISOString(), sample_run_id: split,
+    }),
+  }),
+)
+await page.goto(base)
+await page.getByRole('heading', { name: /free AI capacity is used up/ }).waitFor()
+await shot(page, 'desktop-unavailable.png')
+page = await open(phone, 2)
+await page.route('**/api/availability', (route) =>
+  route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({
+      available: false, reason: 'day_budget', message: 'used up',
+      reset_at_utc: new Date(Date.now() + 5 * 3600_000).toISOString(),
+      reset_at_sydney: new Date(Date.now() + 5 * 3600_000).toISOString(), sample_run_id: split,
+    }),
+  }),
+)
+await page.goto(base)
+await page.getByRole('heading', { name: /free AI capacity is used up/ }).waitFor()
+await shot(page, 'mobile-unavailable.png')
 await browser.close()

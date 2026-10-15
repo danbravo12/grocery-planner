@@ -47,3 +47,22 @@ export function resetTime(iso: string): string {
   const h12 = hour % 12 === 0 ? 12 : hour % 12
   return `${shortDate(date!)}, ${h12}:${mm} ${suffix}`
 }
+
+/** A reset time in the viewer's own time zone, e.g. "Fri 16 Oct, 6:00 pm AEDT". */
+export function localTime(iso: string, timeZone?: string): string {
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return iso
+  const parts = new Intl.DateTimeFormat('en-AU', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    timeZoneName: 'short',
+    timeZone,
+  }).formatToParts(date)
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? ''
+  const pm = get('dayPeriod').toLowerCase()
+  return `${get('weekday')} ${get('day')} ${get('month')}, ${get('hour')}:${get('minute')} ${pm} ${get('timeZoneName')}`
+}

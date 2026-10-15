@@ -187,7 +187,8 @@ describe('submitting', () => {
     renderForm()
     await fillValid(user)
     await user.click(screen.getByRole('button', { name: 'Make my plan' }))
-    expect(await screen.findByText(/Too many plans are running right now. Please try again in a minute./)).toBeInTheDocument()
+    expect(await screen.findByText(/We are busy right now. Please try again in a minute: your answers are still here./)).toBeInTheDocument()
+    expect(screen.getByLabelText('Meal name')).toHaveValue('Friday dinner') // nothing was lost
   })
 
   it('says when a limit resets', async () => {
@@ -197,7 +198,7 @@ describe('submitting', () => {
     await fillValid(user)
     await waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/availability', expect.anything()))
     await user.click(screen.getByRole('button', { name: 'Make my plan' }))
-    expect(await screen.findByText(/limit of plans.*Limits reset at Fri 16 Oct, 6:00 pm Sydney time/)).toBeInTheDocument()
+    expect(await screen.findByText(/limit of plans.*Limits reset at [A-Z][a-z]{2} \d{1,2} [A-Z][a-z]{2}, \d{1,2}:\d{2} (am|pm)/)).toBeInTheDocument()
   })
 
   it('swaps to the unavailable notice if the day closes while you fill the form', async () => {
@@ -209,18 +210,57 @@ describe('submitting', () => {
     renderForm()
     await fillValid(user)
     await user.click(screen.getByRole('button', { name: 'Make my plan' }))
-    expect(await screen.findByText('The planner is resting for today')).toBeInTheDocument()
+    expect(await screen.findByText("Today's free AI capacity is used up")).toBeInTheDocument()
   })
 })
 
 describe('availability', () => {
-  it('shows a simple notice with the reset time and the sample run when unavailable', async () => {
+  it('replaces the form with the unavailable screen: reset time, why, and the sample run', async () => {
     replies.availability = { status: 200, body: { ...OPEN, available: false, reason: 'day_budget' } }
     renderForm()
     const notice = await screen.findByRole('status')
-    expect(within(notice).getByText('The planner is resting for today')).toBeInTheDocument()
-    expect(within(notice).getByText(/Fri 16 Oct, 6:00 pm/)).toBeInTheDocument()
+    expect(within(notice).getByRole('heading', { name: "Today's free AI capacity is used up" })).toBeInTheDocument()
+    expect(within(notice).getByText(/free-tier demo/)).toBeInTheDocument()
+    expect(within(notice).getByText(/\d{1,2}:\d{2} (am|pm)/)).toBeInTheDocument()
     expect(within(notice).getByRole('link', { name: /sample run/ })).toHaveAttribute('href', '/runs/sample-run')
     expect(screen.queryByRole('button', { name: 'Make my plan' })).not.toBeInTheDocument()
+  })
+
+  it('leaves out the sample link when there is none', async () => {
+    replies.availability = { status: 200, body: { ...OPEN, available: false, sample_run_id: null } }
+    renderForm()
+    await screen.findByRole('status')
+    expect(screen.queryByRole('link')).not.toBeInTheDocument()
+  })
+})
+
+describe('examples', () => {
+  it('fill the form with a ready-made plan that can then be edited and sent', async () => {
+    const user = userEvent.setup()
+    renderForm()
+    expect(screen.getByRole('heading', { name: 'Try an example' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /Lamb and pork weekend/ }))
+    const names = screen.getAllByLabelText('Meal name')
+    expect(names.map((n) => (n as HTMLInputElement).value)).toEqual(['Saturday lamb', 'Sunday pork'])
+    expect(screen.getAllByLabelText('Mains 1').map((n) => (n as HTMLInputElement).value)).toEqual(['lamb chops', 'pork chops'])
+    expect(screen.getAllByLabelText('People').map((n) => (n as HTMLInputElement).value)).toEqual(['4', '4'])
+    await user.click(screen.getByRole('button', { name: /Big chicken BBQ/ }))
+    expect(screen.getAllByLabelText('Meal name')).toHaveLength(1)
+    expect(screen.getByLabelText('People')).toHaveValue('10')
+    await user.click(screen.getByRole('button', { name: 'Make my plan' }))
+    await waitFor(() => expect(posted).toHaveLength(1))
+    expect(posted[0]).toMatchObject({
+      meals: [{ meal_name: 'Big chicken BBQ', mains: ['grilled chicken breast'], people: 10, days: 4 }],
+    })
+  })
+
+  it('every example is valid and says what it shows', async () => {
+    const { PRESETS } = await import('../lib/presets')
+    const { validate } = await import('../lib/validation')
+    expect(PRESETS.map((p) => p.id)).toEqual(['close-call', 'one-store', 'split', 'special'])
+    for (const preset of PRESETS) {
+      expect(validate(preset.build())).toEqual({})
+      expect(preset.outcome).toBeTruthy()
+    }
   })
 })

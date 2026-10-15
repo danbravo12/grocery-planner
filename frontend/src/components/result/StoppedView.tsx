@@ -1,6 +1,7 @@
 import type { RunView, Step } from '../../api/client'
 import { quantity, title } from '../../lib/format'
 import { Badge } from '../ui'
+import { TracePanel } from '../TracePanel'
 import { RunFooter } from './RunFooter'
 import { ShoppingList } from './ShoppingList'
 
@@ -66,6 +67,7 @@ export function StoppedView({ run, steps }: { run: RunView; steps: Step[] | null
       )}
 
       {run.ingredient_list && <ShoppingList items={run.ingredient_list.items} />}
+      <TracePanel run={run} />
       <RunFooter run={run} />
     </div>
   )

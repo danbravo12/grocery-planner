@@ -180,6 +180,7 @@ class Parameters(BaseModel):
 
 class Totals(BaseModel):
     requests: int
+    request_budget: int  # the worst case reserved for the run (what the budget guard holds)
     tokens_in: int
     tokens_out: int
     thinking_tokens: int

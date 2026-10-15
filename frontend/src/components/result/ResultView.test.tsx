@@ -7,36 +7,63 @@ import { ResultView } from './ResultView'
 afterEach(() => vi.unstubAllGlobals())
 
 describe('the recommendation card', () => {
-  it('says no meaningful difference in plain words, with the code summary line', () => {
+  const totalsOf = () => within(screen.getByLabelText('Basket totals by store'))
+
+  it('leads with the verdict, then both totals side by side, then the gap line, then why', () => {
     render(<ResultView run={run()} steps={null} />)
     expect(screen.getByRole('heading', { level: 1, name: 'No meaningful difference' })).toBeInTheDocument()
-    expect(screen.getByText(/The stores are too close to call/)).toBeInTheDocument()
-    expect(screen.getByText(/Woolworths is \$1\.00 cheaper on 2 common items/)).toBeInTheDocument()
+    const totals = totalsOf()
+    expect(totals.getByText('Coles').closest('div')).toHaveTextContent('$13.00')
+    expect(totals.getByText('Woolworths').closest('div')).toHaveTextContent('$12.00')
+    expect(totals.getAllByText('Lowest')).toHaveLength(1)
+    expect(totals.getByText('Woolworths').closest('div')).toHaveTextContent('Lowest')
+    expect(screen.getByText('Woolworths is $1.00 cheaper across 2 common items; it takes $8.00 to be worth acting on.')).toBeInTheDocument()
+    expect(screen.getByText('Why')).toBeInTheDocument()
+    expect(screen.getByText('The two stores are within a dollar of each other.')).toBeInTheDocument()
     expect(screen.getByText('Confidence: high')).toBeInTheDocument()
-    expect(screen.queryByText(/Saving:/)).not.toBeInTheDocument()
   })
 
-  it('names the store and the saving for one store', () => {
+  it('no longer shows the monospace summary box (the API still sends the line)', () => {
+    const { container } = render(<ResultView run={run()} steps={null} />)
+    expect(screen.queryByText(/No meaningful difference: Woolworths is \$1\.00 cheaper on 2 common items/)).not.toBeInTheDocument()
+    expect(container.querySelector('p.font-mono')).toBeNull()
+  })
+
+  it('does not mark a lowest store when the totals tie', () => {
+    const tie = run()
+    tie.recommendation!.rule_verdict.totals = { coles: '12.00', woolworths: '12.00' }
+    tie.recommendation!.rule_verdict.gap = '0.00'
+    render(<ResultView run={tie} steps={null} />)
+    expect(totalsOf().queryByText('Lowest')).not.toBeInTheDocument()
+    expect(screen.getByText('The stores cost the same across 2 common items.')).toBeInTheDocument()
+  })
+
+  it('names the store for one store and marks the lower total', () => {
     render(<ResultView run={oneStore()} steps={null} />)
     expect(screen.getByRole('heading', { level: 1, name: 'Shop at Woolworths' })).toBeInTheDocument()
-    expect(screen.getByText(/cheaper than Coles on the items both stores stock/)).toBeInTheDocument()
-    expect(screen.getByText('$18.42')).toBeInTheDocument()
+    expect(totalsOf().getByText('Woolworths').closest('div')).toHaveTextContent('$98.10')
+    expect(totalsOf().getByText('Woolworths').closest('div')).toHaveTextContent('Lowest')
+    expect(totalsOf().getByText('Coles').closest('div')).toHaveTextContent('$116.52')
+    expect(screen.getByText('Woolworths is $18.42 cheaper across 2 common items, over the $8.00 threshold.')).toBeInTheDocument()
   })
 
   it('shows which items to buy elsewhere for a split', () => {
     render(<ResultView run={split()} steps={null} />)
     expect(screen.getByRole('heading', { level: 1, name: 'Split your shop' })).toBeInTheDocument()
-    expect(screen.getByText(/Buy beef mince, eggs at the cheaper store/)).toBeInTheDocument()
-    expect(screen.getByText('$10.00')).toBeInTheDocument()
+    expect(screen.getByText('Splitting saves $10.00 across 2 common items, enough to clear the $8.00 threshold.')).toBeInTheDocument()
+    expect(screen.getByText(/Buy beef mince at Woolworths, and the rest at Coles/)).toBeInTheDocument()
   })
 
   it('explains a conditional verdict: until when it holds and what follows', () => {
     render(<ResultView run={conditional()} steps={null} />)
     expect(screen.getByRole('heading', { level: 1, name: 'Shop at Woolworths' })).toBeInTheDocument()
+    expect(screen.getByText(/Woolworths is \$11\.40 cheaper across/)).toBeInTheDocument()
     const note = screen.getByText(/This depends on a special that ends Tue 20 Oct/).closest('div')!
     expect(within(note).getByText(/If you shop by Tue 20 Oct \(beef mince on special\)/)).toBeInTheDocument()
     expect(within(note).getByText(/After that: no meaningful difference \(the stores are \$1\.40 apart/)).toBeInTheDocument()
-    expect(screen.getByText(/after that, no meaningful difference\./)).toBeInTheDocument() // the code line
+    // the condition comes after the gap line
+    const gap = screen.getByText(/Woolworths is \$11\.40 cheaper across/)
+    expect(gap.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it('says so when matches that are not like for like held the verdict back', () => {

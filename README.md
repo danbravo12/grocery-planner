@@ -97,7 +97,15 @@ cd frontend && npm run build                  # then open http://localhost:8000
 
 Checks: `npm run typecheck`, `npm run lint`, `npm test` (Vitest and Testing Library), `npm run e2e` (a Playwright smoke test with every `/api` route mocked). The API types in `frontend/src/api/types.ts` are generated from the OpenAPI schema (`npm run gen:types`); CI regenerates them and fails if the committed file differs.
 
-![The result view on a desktop](docs/screenshots/desktop-3-result.png)
+**Try an example.** The form has four ready-made plans, each checked against the seeded prices to give a different answer: a close call (Friday dinner), one store clearly wins (Sunday lamb), worth splitting the shop (lamb and pork weekend) and an answer that depends on a special ending soon (big chicken BBQ). They work because the seed has two deliberate price gaps (lamb chops are much cheaper at Coles, pork chops much cheaper at Woolworths) on top of the existing Woolworths chicken special.
+
+**How it worked.** Every run page has a collapsed "How it worked" panel (it reads `/api/runs/{id}/steps`, so it works on shared links): one row per step with the model, requests, tokens and latency, expandable to cache hits, price downgrades by reason, tool calls (what-if split arguments and results) and how many of the run's reserved requests were used. No prompts are shown.
+
+**Sample run.** `SAMPLE_RUN_ID` (the run shown when the day's free capacity is used up) should be a completed run that does not go stale. The split-the-shop run `f95caaf0-a6fc-4587-9395-7422e48bf67d` in the project's Supabase database is the one chosen; set it as `SAMPLE_RUN_ID` in production.
+
+![The result, with a special-driven verdict](docs/screenshots/desktop-hero-conditional.png)
+![The how-it-worked panel](docs/screenshots/desktop-trace-panel.png)
+
 
 ## Database: migrate, seed, integration tests
 

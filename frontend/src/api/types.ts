@@ -604,6 +604,8 @@ export interface components {
             loopback_used: boolean;
             /** Models */
             models: string[];
+            /** Request Budget */
+            request_budget: number;
             /** Requests */
             requests: number;
             /** Thinking Tokens */

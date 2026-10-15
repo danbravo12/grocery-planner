@@ -31,7 +31,7 @@ from grocery_planner.tools.planner_math import (
 )
 from grocery_planner.tools.price_lookup import specials_ending_within
 
-PLANNER_PROMPT_VERSION = "4"
+PLANNER_PROMPT_VERSION = "5"
 MAX_TOOL_ROUNDS = 2
 TIP_MIN_FRACTION = Decimal("0.25")  # of the savings threshold (default $8 -> $2.00)
 SPECIAL_WINDOW_DAYS = 7
@@ -98,9 +98,15 @@ appears in the input or in a tool result, exactly as given (for example $12.50).
 compute, round, add or subtract figures yourself. Do not give percentages as dollars.
 
 Write:
-- reasoning: 2 to 4 plain sentences for a shopper, covering what to do, why, and anything that \
-limits how much to trust it (use the flags and confidence). If confidence is low or medium, say \
-so plainly and why; never tell the shopper to trust a result whose confidence is low.
+- reasoning: at most 2 plain sentences for a shopper that explain WHAT DROVE the result: which \
+items made the difference, how many of the common items are cheaper at which store, any special \
+that matters (with its end date) and any gap in the data (a tier or pack gap, a substitute, a \
+missing item). Be specific: name the items and the stores, for example "The lamb chops account \
+for nearly all of Coles' lead; everything else is within pennies." Do not restate the verdict \
+or the threshold (the shopper has just read both), do not write generic lines such as "the \
+difference is below the threshold" or "splitting lets you take advantage of price differences", \
+and do not say the shopper can shop "with confidence" or that the result can be trusted. If \
+confidence is low or medium, say in a few words what limits it.
 - tips: at most 3, each an item_id and one sentence, only for items whose difference between the \
 stores is at least tip_minimum_saving (given in the input) and that are worth knowing about, \
 for example one expensive item that is cheaper at the other store. An empty list is fine. When \
@@ -544,6 +550,8 @@ def check_output(out: PlannerOutput, facts: PlannerFacts, tool_amounts: set[Deci
     if out.recommendation == "split":
         problems += _split_problems(out, facts)
 
+    problems += _reasoning_problems(out.reasoning)
+
     ids = {r.item_id for r in facts.items}
     for tip in out.tips:
         if tip.item_id not in ids:
@@ -575,6 +583,25 @@ def check_output(out: PlannerOutput, facts: PlannerFacts, tool_amounts: set[Deci
         problems.append(
             f"these dollar amounts are not in the input or a tool result: {', '.join(bad)}; "
             "use only figures that were provided"
+        )
+    return problems
+
+
+_SENTENCE_END = re.compile(r"(?<=[.!?])\s+(?=[A-Z$])")
+_TRUST_WORDS = re.compile(
+    r"\bwith confidence\b|\b(?:can|safe to) (?:be )?trust(?:ed)?\b", re.IGNORECASE
+)
+
+
+def _reasoning_problems(text: str) -> list[str]:
+    """The reasoning explains what drove the result, in at most two sentences, and never tells
+    the shopper to shop with confidence (confidence is shown separately, computed by code)."""
+    problems = []
+    if len(_SENTENCE_END.split(text.strip())) > 2:
+        problems.append("reasoning must be at most 2 sentences")
+    if _TRUST_WORDS.search(text):
+        problems.append(
+            'reasoning must not say to shop "with confidence" or that the result can be trusted'
         )
     return problems
 

@@ -88,6 +88,7 @@ def run_view(run: RunRecord) -> dict[str, Any]:
         "recommendation": _recommendation(run),
         "totals": {
             "requests": run.requests,
+            "request_budget": run.estimated_requests,
             "tokens_in": run.tokens_in,
             "tokens_out": run.tokens_out,
             "thinking_tokens": run.thinking_tokens,
@@ -116,14 +117,26 @@ def _output_summary(step: StepRecord) -> Any:
     if not isinstance(out, dict):
         return None
     if step.name == "ingredient":
-        return {"items": len(out.get("items", [])), "assumptions": out.get("assumptions", [])}
+        cache = out.get("cache") or {}
+        return {
+            "items": len(out.get("items", [])),
+            "cache_hits": cache.get("hits"),
+            "cache_misses": cache.get("misses"),
+            "assumptions": out.get("assumptions", []),
+        }
     if step.name in ("price", "reprice"):
         return {
             "rows": len(out.get("items", [])),
             "rounds": out.get("rounds"),
             "flags": [{"item_id": f["item_id"], "kind": f["kind"]} for f in out.get("flags", [])],
             "downgrades": [
-                {"item_id": d["item_id"], "kind": d.get("kind"), "to": d["to_tier"]}
+                {
+                    "item_id": d["item_id"],
+                    "kind": d.get("kind"),
+                    "from": d.get("from_tier"),
+                    "to": d["to_tier"],
+                    "reason": d.get("reason"),
+                }
                 for d in out.get("downgrades", [])
             ],
         }

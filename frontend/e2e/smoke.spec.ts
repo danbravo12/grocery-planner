@@ -1,5 +1,5 @@
 import { expect, test, type Route } from '@playwright/test'
-import { oneStore } from '../src/test-fixtures'
+import { conditional } from '../src/test-fixtures'
 
 const RUN_ID = '3a1f9a52-0000-4000-8000-000000000001'
 const OPEN = {
@@ -33,7 +33,7 @@ test('fill the form, see progress, see the result (all /api calls mocked)', asyn
   })
   await page.route(`**/api/runs/${RUN_ID}`, (route) => {
     // still running until the stream has said it is done (React StrictMode fetches twice in dev)
-    return json(route, over ? oneStore() : { ...oneStore(), status: 'running', recommendation: null, comparison: [] })
+    return json(route, over ? conditional() : { ...conditional(), status: 'running', recommendation: null, comparison: [] })
   })
   await page.route(`**/api/runs/${RUN_ID}/events*`, async (route) => {
     await finished // hold the stream so the progress view can be seen
@@ -53,12 +53,26 @@ test('fill the form, see progress, see the result (all /api calls mocked)', asyn
     })
   })
 
+  await page.route(`**/api/runs/${RUN_ID}/steps`, (route) =>
+    json(route, {
+      run_id: RUN_ID,
+      steps: [
+        {
+          seq: 1, name: 'ingredient', agent: 'ingredient', attempt: 1, status: 'completed', summary: '1 items from 1 dishes',
+          input: null, output: { items: 1, cache_hits: 0, cache_misses: 1 }, tool_calls: [], requests: 1, tokens_in: 1900,
+          tokens_out: 300, thinking_tokens: 0, latency_ms: 2100, model: 'gemini-3.1-flash-lite', fell_back: false, error: null,
+          started_at: '2026-10-19T01:00:00Z', finished_at: null,
+        },
+      ],
+    }),
+  )
+
   await page.goto('/')
   await expect(page.getByRole('heading', { name: "Plan your week's shop" })).toBeVisible()
-  await page.getByLabel('Meal name').fill('Friday dinner')
-  await page.getByLabel('Mains 1').fill('fillet mignon')
-  await page.getByRole('button', { name: '+ Add a side' }).click()
-  await page.getByLabel('Sides 1').fill('potato salad')
+  // an example fills the form
+  await page.getByRole('button', { name: /Big chicken BBQ/ }).click()
+  await expect(page.getByLabel('Meal name')).toHaveValue('Big chicken BBQ')
+  await expect(page.getByLabel('People')).toHaveValue('10')
   await page.getByRole('button', { name: 'Make my plan' }).click()
 
   // progress
@@ -66,15 +80,22 @@ test('fill the form, see progress, see the result (all /api calls mocked)', asyn
   await expect(page.getByRole('heading', { name: 'Making your plan' })).toBeVisible()
   await expect(page.getByRole('list', { name: 'Progress' })).toBeVisible()
   expect(posted).toMatchObject({
-    meals: [{ meal_name: 'Friday dinner', mains: ['fillet mignon'], sides: ['potato salad'], people: 2, days: 1 }],
+    meals: [{ meal_name: 'Big chicken BBQ', mains: ['grilled chicken breast'], people: 10, days: 4 }],
   })
 
   // result
   finish()
   await expect(page.getByRole('heading', { level: 1, name: 'Shop at Woolworths' })).toBeVisible()
+  await expect(page.getByLabel('Basket totals by store')).toContainText('$85.70')
   await expect(page.getByRole('heading', { name: 'Store by store' })).toBeVisible()
   await expect(page.getByRole('table')).toContainText('Beef mince')
+  await expect(page.getByText(/This depends on a special that ends Tue 20 Oct/)).toBeVisible()
   await expect(page.getByText(/data_source: seeded/)).toBeVisible()
+  // the trace panel is collapsed until opened, then shows the steps
+  await expect(page.getByText('1. Ingredient agent')).toBeHidden()
+  await page.getByText('How it worked').click()
+  await expect(page.getByText('1. Ingredient agent')).toBeVisible()
+  await expect(page.getByText(/gemini-3\.1-flash-lite · 1 request · 1900 in/)).toBeVisible()
   await expect(page.getByRole('button', { name: 'Copy link' })).toBeVisible()
 })
 

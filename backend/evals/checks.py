@@ -463,6 +463,12 @@ def _pl_implicit(s: PlannerSubject, params: dict[str, Any]) -> list[Outcome]:
     out.append(
         _o("tip_rules", not problems, "; ".join(problems) or f"{len(r.tips)} tips, all allowed")
     )
+    from grocery_planner.agents.planner import _reasoning_problems
+
+    style = _reasoning_problems(r.reasoning)
+    out.append(
+        _o("reasoning_style", not style, "; ".join(style) or "at most 2 sentences, no trust claim")
+    )
     c = facts.verdict.condition
     if c is not None and not r.overridden:
         from grocery_planner.agents.planner import condition_date_text

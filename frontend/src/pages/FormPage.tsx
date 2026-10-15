@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { api, ApiError, type Availability } from '../api/client'
 import { AdvancedSettings } from '../components/AdvancedSettings'
 import { MealCard } from '../components/MealCard'
+import { UnavailableScreen } from '../components/UnavailableScreen'
 import { Button, Card } from '../components/ui'
-import { resetTime } from '../lib/format'
+import { localTime } from '../lib/format'
+import { PRESETS } from '../lib/presets'
 import {
   LIMITS,
   advancedChanged,
@@ -17,28 +19,11 @@ import {
   type PlanForm,
 } from '../lib/validation'
 
-export function UnavailableNotice({ reset, sampleRunId }: { reset: string; sampleRunId?: string | null }) {
-  return (
-    <Card role="status" className="mx-auto max-w-xl text-center">
-      <h1 className="text-xl font-semibold">The planner is resting for today</h1>
-      <p className="mt-2 text-stone-700">
-        It has used up today&apos;s AI capacity. It opens again at <strong>{resetTime(reset)}</strong> Sydney time.
-      </p>
-      {sampleRunId && (
-        <p className="mt-4">
-          <Link className="font-medium text-accent-strong underline" to={`/runs/${sampleRunId}`}>
-            See a sample run in the meantime
-          </Link>
-        </p>
-      )}
-    </Card>
-  )
-}
-
 /** The message to show for a refused submit: the API's own wording, plus when a limit resets. */
 function submitMessage(error: ApiError, reset: string | null): string {
+  if (error.code === 'busy') return 'We are busy right now. Please try again in a minute: your answers are still here.'
   if (error.code === 'visitor_limit' || error.code === 'ip_limit') {
-    return reset ? `${error.message} Limits reset at ${resetTime(reset)} Sydney time.` : error.message
+    return reset ? `${error.message} Limits reset at ${localTime(reset)}.` : error.message
   }
   return error.message
 }
@@ -73,13 +58,13 @@ export function FormPage() {
     0,
   )
   const canAddDish = dishes < LIMITS.maxDishesTotal
-  const resetAt = availability?.reset_at_sydney ?? null
+  const resetAt = availability?.reset_at_utc ?? null
 
   if (availability && !availability.available) {
-    return <UnavailableNotice reset={availability.reset_at_sydney} sampleRunId={availability.sample_run_id} />
+    return <UnavailableScreen resetUtc={availability.reset_at_utc} sampleRunId={availability.sample_run_id} />
   }
   if (unavailable) {
-    return <UnavailableNotice reset={unavailable.reset} sampleRunId={availability?.sample_run_id} />
+    return <UnavailableScreen resetUtc={unavailable.reset} sampleRunId={availability?.sample_run_id} />
   }
 
   async function submit(event: React.FormEvent) {
@@ -100,8 +85,8 @@ export function FormPage() {
       if (e.status === 422) {
         setErrors(mapServerErrors(e.fields))
         setBanner('Please fix the highlighted fields.')
-      } else if (e.code === 'unavailable' && typeof e.extra['reset_at_sydney'] === 'string') {
-        setUnavailable({ reset: e.extra['reset_at_sydney'] })
+      } else if (e.code === 'unavailable' && typeof e.extra['reset_at_utc'] === 'string') {
+        setUnavailable({ reset: e.extra['reset_at_utc'] })
       } else {
         setBanner(submitMessage(e, resetAt))
       }
@@ -119,6 +104,31 @@ export function FormPage() {
           whether it&apos;s worth going to one store or splitting the shop.
         </p>
       </div>
+
+      <Card aria-labelledby="examples-title">
+        <h2 id="examples-title" className="text-base font-semibold">
+          Try an example
+        </h2>
+        <p className="mt-1 text-sm text-stone-600">Fills the form with a ready-made plan. You can change anything before sending it.</p>
+        <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+          {PRESETS.map((preset) => (
+            <li key={preset.id}>
+              <button
+                type="button"
+                onClick={() => {
+                  setForm(preset.build())
+                  setErrors({})
+                  setBanner(null)
+                }}
+                className="min-h-11 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-left hover:border-accent hover:bg-accent-soft"
+              >
+                <span className="block text-sm font-semibold">{preset.label}</span>
+                <span className="block text-sm text-stone-600">{preset.outcome}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </Card>
 
       {banner && (
         <div

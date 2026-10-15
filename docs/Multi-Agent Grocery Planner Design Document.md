@@ -116,6 +116,8 @@ This agent finds a comparable product for each purchasable item at each store an
 
 **Output per item per store:** product name, brand label, pack size, price, unit price, special (yes or no and end date), regular price, packs needed, total cost, regular total cost (the same packs at the regular price; equal to the total cost when not on special), match tier, match confidence, status, price timestamp, and `data_source` (seeded for now).
 
+**Deliberate demo gaps:** most seeded prices are within a few percent of each other, so the demo examples rely on two deliberate gaps on items no eval case or fixture references: lamb chops (house brand) are $7.50 at Coles against $12.50 at Woolworths, and pork chops $4.50 at Woolworths against $9.50 at Coles. The examples also use the existing Woolworths chicken special for the conditional verdict.
+
 **Seeded edge cases for evals:** an item missing at one store, mismatched pack sizes, a special ending at the end of the sale week, and a near-identical basket total.
 
 ## Planner agent
@@ -141,7 +143,7 @@ This agent decides where it is worth shopping this week based on savings alone. 
 **Output**
 
 - `recommendation`: one\_store (which), split (which items where), or no\_meaningful\_difference
-- `savings` and `reasoning` in plain language; a one-line summary is rendered by code from the numbers
+- `savings`, and `reasoning` in at most two plain sentences on what drove the result (which items, how many stores are cheaper on how many items, specials, gaps), never restating the verdict or telling the shopper to shop "with confidence"; a one-line summary is rendered by code from the numbers
 - `confidence`, computed by code from the share of comparable items, match confidence and tier or pack gaps (the agent does not set it)
 - `flags[]`: items missing at a store, specials ending within 7 days (information, with each end date), substitute matches, tier and pack gaps
 - `assumptions[]`
@@ -283,6 +285,7 @@ On a reconnect, the client reloads the run's stored state and then resumes strea
 - **Form:** repeatable meal cards (name, mains and sides lists, people, days, avoid with a note not to enter anything personal), a pantry staples toggle and a collapsed Advanced settings panel showing each default and range. Client-side validation mirrors the API caps (7 meals, 4 mains and 4 sides per meal, 20 dishes in total, text lengths); server 422 field errors are mapped onto the same inputs. A closed day shows a simple notice with the reset time and a link to the sample run; a busy or limit refusal shows the API's own message (limits add when they reset).
 - **Progress:** the three agents in order with the current one highlighted, the queue position, and the loop-back rows when the planner sends items back. It is driven by the event stream: a fresh page load replays from event 0, which rebuilds the view, and our own reconnects use `?after=<last seq>`. An `aria-live` region announces each change.
 - **Result:** the recommendation first (verdict in plain words, the code summary line, the condition "if you shop by Tue 20 Oct ... after that ...", confidence, saving, reasoning), then the per-store comparison (pack, cost, tier and flags per pick, totals on common items, excluded items listed), the consolidated shopping list by category with the meals that use each item, tips, flags and assumptions, and a footer (seeded-data notice, requests, latency, model, would-be cost, copy link, "anyone with this link can view this run"). A stopped or failed run shows the message, the ingredient list if there is one and which items failed and why.
+- **Result hero (step 14):** the verdict, then the two store totals as large numbers side by side (the lower one marked), then the gap and the threshold in one plain line, then the condition if there is one, then the reasoning under a small "Why" label and the confidence. The code's summary line stays in the API but is not shown. **How it worked:** a collapsed panel on every run page, loaded from `/api/runs/{id}/steps` on first open (so it works on shared links): a row per step (model, requests, tokens, latency, fallback), expandable to dish-cache hits, price downgrades by reason, tool calls and the requests used against the run's reservation; no prompts. **Examples:** four buttons fill the form with plans verified to give a close call, one store, a split and a special-driven verdict. **Unavailable:** when the day's capacity is used up the form is replaced by a clear message, the reset time in the viewer's own time zone, one line on why (a free-tier demo) and a link to the sample run; a busy refusal keeps the form and asks to try again in a minute.
 - **Design:** mobile first; one accent colour; the comparison reads like a receipt (dashed rules, tabular figures). Labels on every input, keyboard navigable, visible focus, reduced-motion respected.
 
 ## API

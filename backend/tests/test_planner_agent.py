@@ -768,7 +768,7 @@ def test_scenario_g_doubtful_match_drives_the_saving():
 
 def test_prompt_version_and_assumption_rule_in_prompt():
     result, _ = plan(load_price_fixture("a"), out())
-    assert result.prompt_version == "4"
+    assert result.prompt_version == "5"
     assert "Never assume anything about the shopper" in SYSTEM_PROMPT
     assert "tip_minimum_saving" in SYSTEM_PROMPT and "state the date it ends" in SYSTEM_PROMPT
     assert "MUST recommend no_meaningful_difference" in SYSTEM_PROMPT
@@ -776,7 +776,7 @@ def test_prompt_version_and_assumption_rule_in_prompt():
         "You do NOT override for this" in SYSTEM_PROMPT
         and "special_dependency" not in SYSTEM_PROMPT
     )
-    assert "never tell the shopper to trust a result whose confidence is low" in SYSTEM_PROMPT
+    assert "or that the result can be trusted" in SYSTEM_PROMPT
 
 
 def test_summary_line_states_the_condition():
@@ -797,3 +797,41 @@ def test_summary_line_says_why_an_override_held_the_verdict_back():
     line, _ = summary_line(g, "no_meaningful_difference", None, "match_quality")
     assert line.endswith("(threshold $8.00), but the comparison is not like for like.")
     assert summary_line(g, "one_store", None)[0].endswith("(threshold $8.00).")
+
+
+# ---- reasoning style (prompt version 5) ----------------------------------------------------------
+
+
+def test_reasoning_must_explain_what_drove_the_result_in_two_sentences():
+    a = facts_of(load_price_fixture("a"))
+    one = out(reasoning="Woolworths is cheaper on 4 of 5 items, but fries at Coles are on special.")
+    two = out(
+        reasoning="Woolworths is cheaper on 4 of 5 items. The fries special at Coles narrows it."
+    )
+    three = out(reasoning="One. Two. Three.")
+    assert problems(a, one) == [] and problems(a, two) == []
+    assert any("at most 2 sentences" in x for x in problems(a, three))
+    # a dollar figure's decimal point is not a sentence end
+    money = out(
+        reasoning="Woolworths is $1.00 cheaper on 5 items. That is under the $8.00 threshold."
+    )
+    assert problems(a, money) == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "You can shop at either store with confidence.",
+        "The result can be trusted.",
+        "It is safe to trust this result.",
+    ],
+)
+def test_reasoning_must_not_tell_the_shopper_to_trust_it(text):
+    a = facts_of(load_price_fixture("a"))
+    assert any("with confidence" in x or "trusted" in x for x in problems(a, out(reasoning=text)))
+
+
+def test_prompt_asks_for_what_drove_the_result_not_the_verdict():
+    assert "at most 2 plain sentences" in SYSTEM_PROMPT and "WHAT DROVE" in SYSTEM_PROMPT
+    assert "Do not restate the verdict" in SYSTEM_PROMPT and "Be specific" in SYSTEM_PROMPT
+    assert "2 to 4 plain sentences" not in SYSTEM_PROMPT

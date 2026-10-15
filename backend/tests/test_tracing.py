@@ -95,7 +95,7 @@ def test_happy_path_tree_is_one_span_per_step_and_one_generation_per_request():
     # trace-level attributes
     assert root.attrs["app_env"] == "dev" and root.attrs["run_id"] == run_id
     assert root.attrs["tags"] == [
-        "dev", "ingredient@2", "price@2", "planner@4", "model:fake-model",
+        "dev", "ingredient@2", "price@2", "planner@5", "model:fake-model",
     ]  # fmt: skip
     meta = root.attrs["metadata"]
     assert meta["as_of"] == "2026-10-14" and meta["meals"] == 1 and meta["dishes"] == 1
@@ -112,7 +112,7 @@ def test_happy_path_tree_is_one_span_per_step_and_one_generation_per_request():
     )
     assert price.attrs["metadata"]["catalogue_searches"] == 4  # 2 items x 2 stores
     assert price.attrs["metadata"]["catalogue_candidates"] == 12
-    assert price.attrs["prompt_ref"] == "price@2" and plan.attrs["prompt_ref"] == "planner@4"
+    assert price.attrs["prompt_ref"] == "price@2" and plan.attrs["prompt_ref"] == "planner@5"
     assert plan.attrs["output"].startswith("No meaningful difference")
     assert plan.attrs["metadata"]["tool_calls"] == 0 and plan.attrs["metadata"]["confidence"]
     assert (
@@ -174,7 +174,7 @@ def test_loopback_adds_reprice_and_planner_2_spans_with_their_own_generations():
     )
     reprice, planner_2 = tracer.root.children[3:]
     assert reprice.attrs["attempt"] == 2 and reprice.attrs["prompt_ref"] == "price@2"
-    assert planner_2.attrs["prompt_ref"] == "planner@4"
+    assert planner_2.attrs["prompt_ref"] == "planner@5"
     assert tracer.observations() == 11 <= 12
     assert tracer.root.attrs["finish_metadata"]["loopback_used"] is True
 
@@ -449,7 +449,7 @@ def test_langfuse_tracer_emits_the_expected_spans_and_attributes():
     a = dict(root.attributes)
     assert a["langfuse.trace.name"] == "plan_run" and a["langfuse.environment"] == "eval"
     assert set(a["langfuse.trace.tags"]) == {
-        "eval", "ingredient@2", "price@2", "planner@4", "model:fake-model",
+        "eval", "ingredient@2", "price@2", "planner@5", "model:fake-model",
     }  # fmt: skip
     assert json.loads(a["langfuse.observation.metadata.config"])["savings_threshold_dollars"] == "8"
     # parenting: generations sit under their step spans, steps under the root
