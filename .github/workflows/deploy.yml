@@ -41,9 +41,12 @@ jobs:
         run: |
           # An explicit staging dir skips gcloud's bucket-ownership check, which would need
           # storage.buckets.list on the whole project; reading this one bucket is enough.
+          # --suppress-logs: streaming build logs needs a project Viewer role; the logs stay in
+          # the Cloud Build console, and gcloud still waits for the build and fails if it fails.
           gcloud builds submit . \
             --tag "$IMAGE:${GITHUB_SHA::12}" \
             --gcs-source-staging-dir "gs://${PROJECT}_cloudbuild/source" \
+            --suppress-logs \
             --project "$PROJECT" --region "$REGION"
       - name: Deploy the new revision (settings and secrets stay as they are)
         run: |

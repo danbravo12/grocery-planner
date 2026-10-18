@@ -178,7 +178,7 @@ The deployer's permissions (each one is there for a reason, none grants secrets 
 | `roles/artifactregistry.writer` | the repository | push the image |
 | `roles/storage.objectAdmin` | bucket `grocery-planner-deployment_cloudbuild` | upload the source for the build |
 | `roles/storage.legacyBucketReader` | the same bucket | `gcloud builds submit` reads the bucket's metadata before uploading |
-| `roles/logging.viewer` | project | stream build logs |
+| `roles/logging.viewer` | project | read logs (streaming a build's logs into gcloud needs project Viewer, which the deployer does not have, so the workflow uses `--suppress-logs`; read build logs in the Cloud Build console) |
 | `roles/serviceusage.serviceUsageConsumer` | project | call APIs through the project |
 | `roles/iam.serviceAccountUser` | `grocery-planner-run` and the Compute default account | "act as" the runtime identity, and the identity Cloud Build runs as |
 
