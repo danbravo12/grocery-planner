@@ -1,0 +1,22 @@
+# Same list as .dockerignore (gcloud uses this file, not .dockerignore, to choose what to upload)
+# secrets and local state
+.env
+.env.*
+!.env.example
+backend/.env*
+# eval output, caches, dependencies, git
+backend/evals/results/*
+backend/.venv/
+**/__pycache__/
+**/.pytest_cache/
+**/.ruff_cache/
+**/node_modules/
+frontend/dist/
+frontend/playwright-report/
+frontend/test-results/
+.git/
+.github/
+.claude/
+docs/
+**/*.swp
+.DS_Store

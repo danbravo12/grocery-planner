@@ -8,10 +8,10 @@ import re
 import secrets
 import time
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any, Protocol
 
 from fastapi import FastAPI, Request, Response
@@ -21,6 +21,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import Field
 
 from grocery_planner.api import schemas
+from grocery_planner.api.daily import TokenRejected, run_daily, verify_google_oidc
 from grocery_planner.api.errors import ApiError, install_error_handlers
 from grocery_planner.api.queue import RunQueue
 from grocery_planner.api.settings import ApiSettings
@@ -54,6 +55,8 @@ class Services:
     runner: Runner
     budget: DayBudget
     queue: RunQueue | None = None  # built from the settings when not given
+    seed: Callable[[date], int] | None = None  # re-seed the price catalogue (None: no database)
+    verify_token: Callable[[str, str, str], None] = verify_google_oidc  # (token, audience, email)
 
 
 class CreateRun(PlanRequest):
@@ -211,6 +214,27 @@ def create_app(settings: ApiSettings | None = None, services: Services | None = 
     @app.get("/health", response_model=schemas.Health)
     def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.post("/internal/daily", include_in_schema=False)
+    async def daily(request: Request) -> dict[str, Any]:
+        """Cloud Scheduler's daily job. Fails closed: refused unless it is configured and the
+        caller proves to be the scheduler's service account."""
+        s = need()
+        if not (settings.daily_audience and settings.daily_sa_email):
+            raise ApiError(503, "not_configured", "The daily job is not configured.")
+        scheme, _, token = request.headers.get("authorization", "").partition(" ")
+        if scheme.lower() != "bearer" or not token.strip():
+            raise ApiError(401, "unauthorized", "A Google identity token is required.")
+        try:
+            await run_in_threadpool(
+                s.verify_token, token.strip(), settings.daily_audience, settings.daily_sa_email
+            )
+        except TokenRejected as exc:
+            log.warning("daily job refused: %s", exc)
+            raise ApiError(403, "forbidden", "Not allowed.") from None
+        result = await run_in_threadpool(run_daily, s, today_sydney(), settings.prune_keep_days)
+        logging.getLogger("uvicorn.error").info("daily job: %s", result)  # uvicorn logs INFO
+        return result
 
     @app.get("/api/availability", response_model=schemas.Availability)
     async def availability() -> dict[str, Any]:

@@ -7,6 +7,8 @@ from types import SimpleNamespace
 from grocery_planner.api.app import Services
 from grocery_planner.api.settings import ApiSettings
 from grocery_planner.cli import build_runner
+from grocery_planner.db import db_url
+from grocery_planner.db.seed import seed
 from grocery_planner.tools.price_lookup import today_sydney
 
 
@@ -15,4 +17,5 @@ def build_services(settings: ApiSettings) -> Services:
         memory=settings.use_memory, seed=False, ip_secret=settings.ip_hash_secret
     )
     runner = build_runner(args, today_sydney())
-    return Services(runner=runner, budget=runner.budget)
+    reseed = None if settings.use_memory else (lambda anchor: seed(db_url(), anchor))
+    return Services(runner=runner, budget=runner.budget, seed=reseed)

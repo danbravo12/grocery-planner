@@ -30,6 +30,8 @@ class ApiSettings:
     trusted_proxy: bool = False  # read the client IP from X-Forwarded-For
     sample_run_id: str | None = None
     ip_hash_secret: str | None = None
+    daily_audience: str | None = None  # the service URL the scheduler's token is addressed to
+    daily_sa_email: str | None = None  # the only service account allowed to call /internal/daily
     frontend_dist: Path | None = None  # the built frontend, served from the same origin
     use_memory: bool = False  # in-process store and seed file instead of Postgres (local dev)
     max_workers: int = 2
@@ -80,6 +82,8 @@ class ApiSettings:
             trusted_proxy=_flag("TRUSTED_PROXY"),
             sample_run_id=(getenv("SAMPLE_RUN_ID") or "").strip() or None,
             ip_hash_secret=(getenv("IP_HASH_SECRET") or "").strip() or None,
+            daily_audience=(getenv("DAILY_JOB_AUDIENCE") or "").strip().rstrip("/") or None,
+            daily_sa_email=(getenv("DAILY_JOB_SA_EMAIL") or "").strip() or None,
             frontend_dist=_dist(),
             use_memory=(os.environ.get("API_STORE") or getenv("API_STORE") or "").lower()
             == "memory",

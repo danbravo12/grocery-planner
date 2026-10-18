@@ -2,13 +2,30 @@
 
 A multi-agent grocery planner: meals in, shopping list, supermarket prices, and a where-to-shop recommendation out. Full design: [docs/Multi-Agent Grocery Planner Design Document.md](docs/Multi-Agent%20Grocery%20Planner%20Design%20Document.md). Choices the design doc left open are logged in [docs/DECISIONS.md](docs/DECISIONS.md).
 
-**Status: step 12 of the build plan.** Backend complete: ingredient, price and planner agents, orchestrator, guardrails, tracing, evals, GitHub Actions and the HTTP API (create a run, read it, follow it over SSE). The frontend (form, live progress, result view) is in `frontend/`.
+**Live demo: https://grocery-planner-99862655427.australia-southeast1.run.app** (Cloud Run, Sydney). It is a free-tier demo with seeded, fictional prices: pick an example, press the button, and watch the three agents work (about 10 to 45 seconds). The first visit after a quiet spell takes a few seconds longer (the instance scales to zero).
+
+**Status: step 15 of the build plan: deployed.** Ingredient, price and planner agents, orchestrator, guardrails, tracing, evals, the HTTP API, the React frontend, CI and a Cloud Run deployment.
+
+### Architecture at a glance
+
+```
+Browser --> Cloud Run (Sydney, one container: React app + FastAPI, same origin)
+              |-- Supabase Postgres (Sydney, session pooler): runs, prices, counters, dish cache
+              |-- Gemini API (free tier): ingredient, price and planner agents
+              `-- Langfuse (Japan): one trace per run, tagged environment=prod
+Cloud Scheduler 00:10 Sydney --> POST /internal/daily (Google identity token): re-seed prices, sweep, prune
+GitHub Actions "Deploy" (manual, Workload Identity Federation, no keys) --> Cloud Build --> Cloud Run
+```
+
+Deploying, rolling back, rotating a secret, costs (about $0 to $2 a month at demo traffic) and the smoke test results are in **[docs/DEPLOY.md](docs/DEPLOY.md)**.
 
 ## Layout
 
 ```
 backend/    Python 3.12 package `grocery_planner` (FastAPI, Pydantic v2, psycopg 3)
-frontend/   placeholder (React + Vite later)
+frontend/   React + Vite + TypeScript + Tailwind (served by the API in production)
+deploy/     helper for the Cloud Run secrets (see docs/DEPLOY.md)
+Dockerfile  the image Cloud Run runs (frontend build + API, one worker)
 db/migrations/   plain-SQL schema
 db/seed/         seeded price catalogue + EDGE_CASES.md
 docs/       design doc and DECISIONS.md
@@ -158,7 +175,7 @@ CI: `.github/workflows/ci.yml` runs ruff, the unit tests and the integration tes
 
 ## Known limitation: Supabase free tier pauses
 
-Free Supabase projects can pause after inactivity. A keep-alive ping against `/health` (plus a cheap DB query) is planned; check Supabase's current free-tier terms before launch.
+Free Supabase projects can pause after inactivity. In production Cloud Scheduler calls `/internal/daily` every day at 00:10 Sydney; the job re-seeds the prices (a write), which keeps the project active. Check Supabase's current free-tier terms. If you run the app elsewhere you need your own daily call.
 
 ## Tracing (Langfuse)
 
@@ -170,5 +187,6 @@ A tracer error never affects a run. Tests use a recording tracer and an in-memor
 
 ## Known limitations
 
+- Production runs on **one** Cloud Run instance (the queue and limiter are in memory), scales to zero (a cold start of about 7 s), and shares its Supabase database and Gemini free quota with development. When the day's free quota is gone the site says so and links to a sample run. Details in [docs/DEPLOY.md](docs/DEPLOY.md).
 - Per-visitor limits (5 runs per visitor and 20 per IP per Pacific day) rely on a cookie and an IP, so they can be bypassed by clearing the cookie or changing IP. There are no accounts.
 - The per-minute request limiter lives in one process; running several backend processes would multiply the limit.

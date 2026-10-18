@@ -193,7 +193,7 @@ The database is Supabase Postgres, with plain SQL so the schema stays portable. 
 
 **Run links:** run IDs are long random values, not sequential numbers. The UI says that anyone with a link can view the run. Runs hold nothing personal; the free-text avoid field is the only place a user might type something sensitive, so a short notice sits beside it.
 
-**Operations:** free Supabase projects can pause after a period of inactivity, which would break the demo. A scheduled keep-alive ping or health check prevents that, and the README documents it. Check the current free-tier terms before launch.
+**Operations:** free Supabase projects can pause after a period of inactivity, which would break the demo. In production Cloud Scheduler calls an authenticated endpoint (`POST /internal/daily`, a Google OIDC token checked for issuer, audience and the scheduler's service account) every day at 00:10 Sydney time. The job re-seeds the price catalogue with today's Sydney date (the seeded specials are relative dates), closes stale and orphaned queued runs, prunes old counters, and its writes keep the free Supabase project active. It runs on a single Cloud Run instance in Sydney (min 0, max 1, CPU always allocated while the instance exists, request timeout one hour for the event stream) behind the Session pooler of the Supabase project; secrets come from Secret Manager and the container is built by Cloud Build. The runbook is `docs/DEPLOY.md`. Check the current free-tier terms of Supabase.
 
 ## Guardrails
 
@@ -353,6 +353,10 @@ Every parameter has a default and a clamped range, and the values used are store
 | Small eval set of about 30 to 40 cases | Free-tier speed limits | Larger sets, production sampling and drift monitoring |
 | Database connections from a single backend | Demo scale | Connection pooling and read replicas |
 | Run links are public to anyone with the link | No accounts | Private runs and expiry |
+| One Cloud Run instance (`max-instances 1`) | The run queue, per-minute limiter and sweeps are in memory | A shared queue and limiter (database or cache), then more instances |
+| Dev and prod share one Supabase database and one Gemini quota | One free project of each | Separate environments and a paid, per-environment key |
+| Cold start of about 7 s after idle | Scale to zero keeps an idle demo free | `--min-instances 1` (about $50 a month) |
+| Gemini keys are kept in unbilled projects | A leaked key cannot run up a bill | A paid key with a hard budget cap, once there is real traffic |
 
 ## Open items to decide before building
 

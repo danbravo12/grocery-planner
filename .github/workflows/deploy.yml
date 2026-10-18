@@ -1,0 +1,58 @@
+name: Deploy
+
+# Manual only: run it from the Actions tab (or `gh workflow run deploy.yml`). It builds the image
+# in Cloud Build (linux/amd64) from the commit you ran it on and rolls Cloud Run over to it.
+# No service account key exists: GitHub proves who it is with a short-lived OIDC token and Google
+# swaps that for access as the deployer service account (Workload Identity Federation).
+# Setup and the trust rules are in docs/DEPLOY.md.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # lets the job request the OIDC token Google checks
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+env:
+  PROJECT: grocery-planner-deployment
+  REGION: australia-southeast1
+  SERVICE: grocery-planner
+  IMAGE: australia-southeast1-docker.pkg.dev/grocery-planner-deployment/grocery-planner/app
+  WORKLOAD_IDENTITY_PROVIDER: projects/99862655427/locations/global/workloadIdentityPools/github/providers/github-actions
+  DEPLOYER: grocery-planner-deployer@grocery-planner-deployment.iam.gserviceaccount.com
+
+jobs:
+  deploy:
+    name: Build and deploy to Cloud Run
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    if: github.ref == 'refs/heads/main' # the Google side also refuses any other ref
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.DEPLOYER }}
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+      - name: Build the image in Cloud Build
+        run: |
+          gcloud builds submit . \
+            --tag "$IMAGE:${GITHUB_SHA::12}" \
+            --project "$PROJECT" --region "$REGION"
+      - name: Deploy the new revision (settings and secrets stay as they are)
+        run: |
+          gcloud run deploy "$SERVICE" \
+            --image "$IMAGE:${GITHUB_SHA::12}" \
+            --region "$REGION" --project "$PROJECT"
+      - name: Check the live service
+        run: |
+          url=$(gcloud run services describe "$SERVICE" --region "$REGION" --project "$PROJECT" --format='value(status.url)')
+          for i in 1 2 3 4 5; do
+            curl -fsS "$url/health" && exit 0
+            sleep 5
+          done
+          echo "health check failed" >&2
+          exit 1
