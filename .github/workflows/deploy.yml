@@ -39,8 +39,11 @@ jobs:
       - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
       - name: Build the image in Cloud Build
         run: |
+          # An explicit staging dir skips gcloud's bucket-ownership check, which would need
+          # storage.buckets.list on the whole project; reading this one bucket is enough.
           gcloud builds submit . \
             --tag "$IMAGE:${GITHUB_SHA::12}" \
+            --gcs-source-staging-dir "gs://${PROJECT}_cloudbuild/source" \
             --project "$PROJECT" --region "$REGION"
       - name: Deploy the new revision (settings and secrets stay as they are)
         run: |

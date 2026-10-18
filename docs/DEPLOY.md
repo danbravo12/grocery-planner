@@ -177,9 +177,12 @@ The deployer's permissions (each one is there for a reason, none grants secrets 
 | `roles/cloudbuild.builds.editor` | project | start builds |
 | `roles/artifactregistry.writer` | the repository | push the image |
 | `roles/storage.objectAdmin` | bucket `grocery-planner-deployment_cloudbuild` | upload the source for the build |
+| `roles/storage.legacyBucketReader` | the same bucket | `gcloud builds submit` reads the bucket's metadata before uploading |
 | `roles/logging.viewer` | project | stream build logs |
 | `roles/serviceusage.serviceUsageConsumer` | project | call APIs through the project |
 | `roles/iam.serviceAccountUser` | `grocery-planner-run` and the Compute default account | "act as" the runtime identity, and the identity Cloud Build runs as |
+
+The workflow passes `--gcs-source-staging-dir gs://grocery-planner-deployment_cloudbuild/source`. Without it gcloud runs a bucket-ownership check that lists every bucket in the project (`storage.buckets.list`), a permission only broad roles carry; naming the bucket skips that check, so the deployer needs nothing project-wide.
 
 Run it from the Actions tab ("Deploy" > Run workflow) or `gh workflow run deploy.yml`. It builds `app:<first 12 chars of the commit>`, deploys that image (settings and secrets stay as they are) and curls `/health`.
 
