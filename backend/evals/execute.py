@@ -170,7 +170,9 @@ def execute(case: Case, make_llm: LLMFactory, meter: Meter) -> Execution:
     except SchemaValidationFailed as exc:
         kind, msg = "schema", f"SchemaValidationFailed: {'; '.join(exc.errors)[:300]}"
     except LLMError as exc:
-        kind, msg = "model", f"{type(exc).__name__}: {exc}"[:300]
+        # a cancelled request (gRPC/HTTP 499) is the provider dropping the call, not an answer
+        cancelled = getattr(exc.__cause__, "code", None) == 499 or str(exc).startswith("499 ")
+        kind, msg = "infra" if cancelled else "model", f"{type(exc).__name__}: {exc}"[:300]
     except Exception as exc:  # a bug in the case or the agent: report it, keep going
         kind, msg = "internal", f"{type(exc).__name__}: {exc}"[:300]
     return Execution(None, scrub(msg), kind, time.perf_counter() - start)

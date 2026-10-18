@@ -7,6 +7,7 @@ staples and sanity flags, is plain code.
 
 import json
 import math
+import re
 from collections.abc import Iterable
 from decimal import Decimal
 
@@ -92,15 +93,56 @@ SANITY_RANGES: dict[tuple[str, str], tuple[Decimal, Decimal]] = {
 # ---- validation against the vocabulary -----------------------------------------------------
 
 
+MAX_NAME_WORDS, MAX_NAME_CHARS, COPIED_RUN = 4, 40, 3
+_NAME_OK = re.compile(r"[^\W\d_]+(?:['\- ][^\W\d_]+)*")
+_WORD = re.compile(r"[^\W_]+(?:'[^\W_]+)*")
+
+
+def _words(text: str) -> list[str]:
+    return _WORD.findall(text.lower())
+
+
+def name_problem(name: str, dish_name: str) -> str | None:
+    """Why an out-of-vocabulary ingredient name is not a plain ingredient name, or None. A dish
+    name that is an instruction must not come back as an ingredient: names are short, plain
+    letters, and never repeat a run of three or more words from the dish text."""
+    name = name.strip()
+    words = _words(name)
+    if len(words) > MAX_NAME_WORDS or len(name) > MAX_NAME_CHARS:
+        return (
+            f"'{name[:40]}' is too long for an ingredient name (at most {MAX_NAME_WORDS} words "
+            f"and {MAX_NAME_CHARS} characters)"
+        )
+    if not _NAME_OK.fullmatch(name):
+        return f"'{name[:40]}' must use only letters, spaces, hyphens and apostrophes"
+    dish_words = _words(dish_name)
+    runs = {tuple(dish_words[i : i + COPIED_RUN]) for i in range(len(dish_words) - COPIED_RUN + 1)}
+    if any(tuple(words[i : i + COPIED_RUN]) in runs for i in range(len(words) - COPIED_RUN + 1)):
+        return f"'{name[:40]}' repeats the dish text; give a plain ingredient name instead"
+    return None
+
+
+def unusable_names(dish: DishResult, vocab: dict[str, VocabEntry], dish_name: str) -> list[str]:
+    """Names of out-of-vocabulary ingredients that fail name_problem."""
+    in_vocab = {name.lower() for name in vocab}
+    return [
+        i.name
+        for i in dish.ingredients
+        if i.name.strip().lower() not in in_vocab and name_problem(i.name, dish_name)
+    ]
+
+
 def dish_problems(
     dish: DishResult,
     vocab: dict[str, VocabEntry],
     dish_name: str | None = None,
     avoid: str | None = None,
+    names: bool = True,
 ) -> list[str]:
     """Things wrong with one dish: a vocabulary claim that is false, the wrong unit, a brand that
     the dish text does not contain (when the dish name is given), or an ingredient that a known
-    avoid category forbids (when the avoid text is given)."""
+    avoid category forbids (when the avoid text is given), or an out-of-vocabulary name that
+    fails name_problem (names=False leaves that check to the caller)."""
     by_lower = {name.lower(): e for name, e in vocab.items()}
     problems = []
     for ing in dish.ingredients:
@@ -111,6 +153,8 @@ def dish_problems(
                     f"'{ing.name}' is marked in_vocabulary but is not in the vocabulary; use an "
                     "exact vocabulary name, or set in_vocabulary to false"
                 )
+            elif names and dish_name is not None and (why := name_problem(ing.name, dish_name)):
+                problems.append(why)
         elif not ing.in_vocabulary:
             problems.append(f"'{ing.name}' is in the vocabulary, so set in_vocabulary to true")
         elif ing.unit != entry.unit:
@@ -139,10 +183,13 @@ def batch_model(
     """The output type for one model call: ExpansionBatch plus checks that make the model layer's
     schema repair fire on vocabulary and unit mistakes and on missing or unknown dish ids."""
     expected = list(expected_ids)
+    validations = 0  # the first check asks for a repair on a bad name; after that the agent drops
 
     class CheckedBatch(ExpansionBatch):
         @model_validator(mode="after")
         def _check(self) -> "CheckedBatch":
+            nonlocal validations
+            validations += 1
             problems = []
             ids = [d.dish_id for d in self.dishes]
             if sorted(ids) != sorted(expected):
@@ -152,7 +199,7 @@ def batch_model(
             for dish in self.dishes:
                 name = (dish_names or {}).get(dish.dish_id)
                 avoid = (avoids or {}).get(dish.dish_id)
-                found = dish_problems(dish, vocab, name, avoid)
+                found = dish_problems(dish, vocab, name, avoid, names=validations == 1)
                 problems += [f"dish {dish.dish_id}: {p}" for p in found]
             if problems:
                 raise ValueError("; ".join(problems))
@@ -216,6 +263,7 @@ def run_ingredient_agent(
     # 3. One model call for everything uncached; nothing is cached unless it all validates.
     usage = Usage()
     model, fell_back = "", False
+    dropped: dict[tuple[str, str, str], str] = {}  # dish key -> the assumption to show
     if misses:
         payload = {
             "dishes": [
@@ -238,15 +286,23 @@ def run_ingredient_agent(
         model, fell_back = result.model, result.fell_back
         by_id = {d.dish_id: d for d in result.parsed.dishes}
         for d in misses:
-            dish_result = _canonical(
-                DishResult(**by_id[d.dish_id].model_dump(exclude={"dish_id"})), vocab
-            )
+            dish_result = DishResult(**by_id[d.dish_id].model_dump(exclude={"dish_id"}))
+            # Still a bad name after the repair: the item goes, the dish is not cached.
+            bad = set(unusable_names(dish_result, vocab, d.dish_name))
+            if bad:
+                dish_result = dish_result.model_copy(
+                    update={
+                        "ingredients": [i for i in dish_result.ingredients if i.name not in bad]
+                    }
+                )
+                dropped[d.key] = f"Couldn't interpret '{d.dish_name[:30]}' as a dish; left it out."
+            dish_result = _canonical(dish_result, vocab)
             results[d.key] = dish_result
-            if not bypass_cache:
+            if not bypass_cache and d.key not in dropped:
                 cache.put(*d.key, d.dish_name, dish_result, result.model)
 
     listing = _assemble(
-        request, dishes, results, vocab, usage, CacheStats(hits=hits, misses=len(misses))
+        request, dishes, results, vocab, usage, CacheStats(hits=hits, misses=len(misses)), dropped
     )
     return listing.model_copy(update={"model": model, "fell_back": fell_back})
 
@@ -261,6 +317,7 @@ def _assemble(
     vocab: dict[str, VocabEntry],
     usage: Usage,
     stats: CacheStats,
+    dropped: dict[tuple[str, str, str], str] | None = None,
 ) -> IngredientList:
     merged: dict[tuple[str, str, str], dict] = {}
     assumptions: list[str] = []
@@ -275,6 +332,8 @@ def _assemble(
             key = _cache_key(dish_name, meal.avoid)
             for a in results[key].assumptions:
                 note(f"{dish_name}: {a}")
+            if key in (dropped or {}):
+                note(dropped[key])
             for ing in results[key].ingredients:
                 entry = vocab.get(ing.name)
                 item = merged.setdefault(

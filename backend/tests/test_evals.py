@@ -499,6 +499,25 @@ def test_infrastructure_errors_are_not_scored_and_a_daily_quota_stops_the_run():
     assert quota and any(line.startswith("QUOTA") for line in lines)
 
 
+def test_a_cancelled_499_is_infrastructure_but_other_client_errors_are_scored():
+    from grocery_planner.llm.types import LLMError
+
+    case = BY_ID["ing-friday-dinner"]
+    cancelled = LLMError("499 CANCELLED: The operation was cancelled.")
+    fake = FakeLLMClient([cancelled])
+    r = run_case(case, lambda meter, hooks: _hooked(fake, meter), 1)
+    assert r.error_kind == "infra" and r.scored is False and r.outcomes == []
+
+    wrapped = LLMError("something else")  # the cause carries the code
+    wrapped.__cause__ = type("E", (Exception,), {"code": 499})()
+    fake = FakeLLMClient([wrapped])
+    assert run_case(case, lambda meter, hooks: _hooked(fake, meter), 1).scored is False
+
+    fake = FakeLLMClient([LLMError("400 INVALID_ARGUMENT: bad request")])
+    r = run_case(case, lambda meter, hooks: _hooked(fake, meter), 1)
+    assert r.error_kind == "model" and r.scored is True
+
+
 def test_schema_failure_is_scored_but_infrastructure_is_not():
     rows = results("price", [True, True, True, True])
     rows[0].update(scored=False, passed=False, outcomes=[], error_kind="infra", error="503")
