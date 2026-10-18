@@ -1,161 +1,75 @@
 # Grocery Planner
 
-A multi-agent grocery planner: meals in, shopping list, supermarket prices, and a where-to-shop recommendation out. Full design: [docs/Multi-Agent Grocery Planner Design Document.md](docs/Multi-Agent%20Grocery%20Planner%20Design%20Document.md). Choices the design doc left open are logged in [docs/DECISIONS.md](docs/DECISIONS.md).
+Describe the meals you plan to cook; three agents build the shopping list, price it at two supermarkets and say whether it is worth splitting the shop. Code does the arithmetic; the models decide and explain.
 
-**Live demo: https://grocery-planner-99862655427.australia-southeast1.run.app** (Cloud Run, Sydney). It is a free-tier demo with seeded, fictional prices: pick an example, press the button, and watch the three agents work (about 10 to 45 seconds). The first visit after a quiet spell takes a few seconds longer (the instance scales to zero).
+**Live demo: https://grocery-planner-99862655427.australia-southeast1.run.app** · [Sample run](https://grocery-planner-99862655427.australia-southeast1.run.app/runs/f95caaf0-a6fc-4587-9395-7422e48bf67d)
 
-**Status: step 15 of the build plan: deployed.** Ingredient, price and planner agents, orchestrator, guardrails, tracing, evals, the HTTP API, the React frontend, CI and a Cloud Run deployment.
+It is a free-tier demo with seeded, fictional prices. On the form, **Try an example** has four presets that fill it in: a close call, one store clearly cheaper, a split, and a verdict that depends on a special ending. A run takes about 10 to 45 seconds. The first visit after a quiet spell takes a few seconds longer because the service scales to zero.
 
-### Architecture at a glance
+![The result for a split-the-shop plan](docs/screenshots/hero-split.png)
 
-```
-Browser --> Cloud Run (Sydney, one container: React app + FastAPI, same origin)
-              |-- Supabase Postgres (Sydney, session pooler): runs, prices, counters, dish cache
-              |-- Gemini API (free tier): ingredient, price and planner agents
-              `-- Langfuse (Japan): one trace per run, tagged environment=prod
-Cloud Scheduler 00:10 Sydney --> POST /internal/daily (Google identity token): re-seed prices, sweep, prune
-GitHub Actions "Deploy" (manual, Workload Identity Federation, no keys) --> Cloud Build --> Cloud Run
-```
+| 3 | 10 s | $0.003 | 39 of 39 |
+| :---: | :---: | :---: | :---: |
+| model requests per run (median) | end-to-end time (median; p90 31 s) | would-be paid-tier cost per run (median) | eval cases passing in CI |
 
-Deploying, rolling back, rotating a secret, costs (about $0 to $2 a month at demo traffic) and the smoke test results are in **[docs/DEPLOY.md](docs/DEPLOY.md)**.
+From 20 completed runs of the last 7 days (my own test runs, not users) and the CI evals run of 2026-10-18. Sources, queries and caveats: [docs/NUMBERS.md](docs/NUMBERS.md).
 
-## Layout
+**Contents:** [How it works](#how-it-works) · [Design decisions](#design-decisions-and-trade-offs) · [Evals](#evals) · [Guardrails](#guardrails-and-safety) · [Observability](#observability) · [Lessons learned](#lessons-learned) · [Limitations](#limitations-and-what-id-change-at-scale) · [Run it](#run-it-locally-and-deploy) · [Docs](docs/README.md)
 
-```
-backend/    Python 3.12 package `grocery_planner` (FastAPI, Pydantic v2, psycopg 3)
-frontend/   React + Vite + TypeScript + Tailwind (served by the API in production)
-deploy/     helper for the Cloud Run secrets (see docs/DEPLOY.md)
-Dockerfile  the image Cloud Run runs (frontend build + API, one worker)
-db/migrations/   plain-SQL schema
-db/seed/         seeded price catalogue + EDGE_CASES.md
-docs/       design doc and DECISIONS.md
-```
+## How it works
 
-## Setup and running tests
-
-On a fresh Mac, install [uv](https://docs.astral.sh/uv/) with Homebrew; uv then fetches Python 3.12 itself. No network or database is needed to run the tests.
-
-```bash
-brew install uv
-cd backend
-uv sync
-uv run pytest
-uv run ruff check .
-```
-
-Tests marked `integration` need a real Postgres and are skipped when `SUPABASE_DB_URL` is not set. To run everything, copy `.env.example` to `backend/.env` (git-ignored) and set `SUPABASE_DB_URL`. To run only the offline tests:
-
-```bash
-uv run pytest -m "not integration"
+```mermaid
+flowchart TD
+    form["Form<br/>meals, people, days, avoid"]:::code
+    subgraph S1["Ingredient agent"]
+        direction LR
+        ingM["MODEL: expand every dish<br/>in one call, cached per dish"]:::model --> ingC["Scale by people x days, merge,<br/>round, avoid guard, name guard"]:::code
+    end
+    subgraph S2["Price agent"]
+        direction LR
+        cand["Up to 5 candidates<br/>per item per store"]:::code --> priceM["MODEL: pick a match<br/>and a tier per store"]:::model --> priceC["Enforce tiers, cost of whole<br/>packs, pack-gap flags"]:::code
+    end
+    stop{"Stop check<br/>too much missing or<br/>not comparable?"}:::code
+    stopped["Run stops: ingredient list<br/>kept, message shown"]:::code
+    subgraph S3["Planner agent"]
+        direction LR
+        verdict["Totals, savings, rule verdict,<br/>verdict at regular prices"]:::code --> plannerM["MODEL: explain the verdict,<br/>may call the what-if split tool"]:::model --> check["Check: every dollar figure<br/>is from code, else one repair"]:::code
+    end
+    result["Result: verdict, totals,<br/>why, confidence, flags"]:::code
+    reprice["MODEL: price agent re-prices<br/>just the doubtful items"]:::model
+    form --> S1 --> S2 --> stop
+    stop -- yes --> stopped
+    stop -- no --> S3
+    check -- done --> result
+    check -- "doubtful matches (once only)" --> reprice --> stop
+    classDef model fill:#fde7c8,stroke:#b45309,color:#1c1917
+    classDef code fill:#dbeafe,stroke:#1d4ed8,color:#1c1917
 ```
 
-## Seeded prices are fictional
+Orange boxes are model calls; blue boxes are plain code. A normal run makes 2 to 4 model requests.
 
-Every price in `db/seed/price_catalogue.json` is made up for testing, in AUD, and plausible rather than real. Brand names other than Coles and Woolworths (Kingsway, Harvest Farm, Bellvue, Goldleaf) are invented. Nothing here comes from a supermarket. Every product carries `data_source: "seeded"`. See `db/seed/EDGE_CASES.md` for the deliberate test cases.
+The agents do the parts that need judgment: what a dish probably contains, which supermarket product matches an ingredient, and how to explain a verdict in plain words. Everything that must be exact is code: scaling quantities, merging lines, whole-pack costs, totals, the decision rule, the confidence level and the dollar figures. The planner follows a verdict that code computed and may override it for one reason only, doubtful matches. Every dollar amount in its text has to equal a number code produced or a tool returned, or the answer goes back for one repair. A run is a fixed sequence with one loop-back, so its cost and behaviour are predictable.
 
-## Model layer and live tests
+## Design decisions and trade-offs
 
-`grocery_planner/llm/` holds a provider-neutral `LLMClient`, a Gemini implementation (`GeminiClient`) and a scripted `FakeLLMClient` for tests. Set `GEMINI_API_KEY` (and optionally `GEMINI_MODEL`, default `gemini-3.1-flash-lite`) in `backend/.env`. If the primary model is unavailable the call is retried once on `GEMINI_FALLBACK_MODEL` (default `gemini-3.5-flash-lite`); set `GEMINI_FALLBACK_MODEL=none` (or build the client with `fallback_model=None`) to pin a run to one model, as evals should, and check `result.fell_back` / `result.model`. Normal test runs never call Gemini. The live smoke test uses a few free-tier requests:
+- **Batching, over one call per item.** The ingredient agent expands all dishes in one call and the price agent prices all items in one call, because the binding limit is the free tier's requests per day (500 assumed), not tokens. A run costs 2 to 4 requests, so the daily budget covers about 99 runs at the median.
+- **A rule verdict computed by code, over letting the model decide.** Savings maths is exact and checkable, and the model is good at the part left to it, explanation. The planner may override only for `match_quality`.
+- **A conditional verdict for weekly specials, over an override.** Specials run Wednesday to Tuesday, so a verdict can hold only until a date. Code computes the verdict twice (current prices, and with specials put back to regular price); if they differ the answer carries "if you shop by Tue 20 Oct ... after that ...". It is true on both sides of the date.
+- **A thin model layer I wrote, over calling the SDK directly from the agents.** The budget needs a hook before and after every send, retries differ by failure type (timeouts once, 5xx and per-minute 429s three times, per-day 429s never), schema repair is one extra request, and a tool conversation has to restart on a different model.
+- **A fallback model with its own budget, over a single model.** Both Gemini models had outages during the build. A call that fails on the primary runs once more on the fallback; quota is per model, so the fallback keeps its own counter.
+- **An atomic worst-case reservation, over counting afterwards.** A run reserves its 9-request worst case in one conditional SQL update and releases the unused part, so ten simultaneous runs cannot overshoot the day's budget (a test runs 20 threads against a 20-request limit: exactly 2 get in).
+- **Deterministic evals with no LLM judge, over a judge model.** Every check is exact (required items, quantity ranges, allowed product ids, no invented dollar amounts), so a failure means something specific and the scores are not noisy. A judge is a later addition if a fuzzy question starts to matter.
+- **The frontend served by the API on the same origin, over a separate static host.** No CORS, the HttpOnly visitor cookie just works, one thing to deploy, and the SSE stream needs no proxying.
+- **One Cloud Run instance, over several.** The run queue, per-minute limiter and sweeps live in memory, and the host must allow long-lived streaming responses. Scale-to-zero keeps an idle demo at about $0 a month.
+- **Seeded, fictional prices behind a lookup interface, over scraping.** Scraping is brittle and may breach store terms. The interface returns the fields a live source would, including a price timestamp.
 
-```bash
-uv run pytest -m live -s
-```
+The conditional verdict, from a run on 2026-10-18 (the date in it has passed since):
 
-## Running a plan from the command line
-
-```bash
-cd backend
-uv run python -m grocery_planner.cli run examples/request_1.json            # stored in Postgres
-uv run python -m grocery_planner.cli run examples/request_2.json --memory   # no database
-```
-The CLI refuses to start (exit code 3) when the day's AI budget is used up, and prints the per-model counters after every run. Options: `--as-of YYYY-MM-DD` (default today, Sydney), `--bypass-cache` (skip the dish cache), `--seed` (refresh the Postgres catalogue first), `--memory` (in-process store and the seed file). Exit code 0 completed, 1 stopped (too little to compare), 2 failed, 3 unavailable today. A request file is a plan request plus optional `parameters` (savings and stop thresholds).
-
-## Run the API locally
-
-```bash
-cd backend
-uv run uvicorn grocery_planner.main:app --port 8000          # Postgres, real Gemini (backend/.env)
-API_STORE=memory uv run uvicorn grocery_planner.main:app     # no database, seed file prices
-```
-
-Interactive docs are at `/docs` when `APP_ENV=dev` (hidden otherwise). A plan, end to end:
-
-```bash
-curl -si -c jar -X POST localhost:8000/api/runs -H 'content-type: application/json' \
-     --data @examples/request_1.json            # 202 {run_id, run_url, events_url}
-curl -N localhost:8000/api/runs/<run_id>/events # server-sent events until run_completed
-curl localhost:8000/api/runs/<run_id>           # the finished run
-```
-
-| Endpoint | Purpose | Status codes |
-| --- | --- | --- |
-| `GET /health` | liveness | 200 |
-| `GET /api/availability` | open today? reset time, sample run id | 200 |
-| `POST /api/runs` | start a plan (body: the meal form plus optional `parameters`) | 202; 400 bad JSON; 413 body over 32 KB; 422 field messages; 429 `visitor_limit` / `ip_limit`; 503 `unavailable` / `day_budget` / `busy` |
-| `GET /api/runs/{id}` | public run view | 200; 404 |
-| `GET /api/runs/{id}/steps` | step records for the "how it worked" panel | 200; 404 |
-| `GET /api/runs/{id}/events` | SSE: replays from `Last-Event-ID` (or `?after=`), then live; heartbeat comment every 15 s; closes after `run_completed` or `run_failed` (a stopped run too); `queued` while waiting | 200; 404 |
-
-Errors are `{code, message}`. Settings (see `.env.example`): `FRONTEND_ORIGINS` (CORS), `TRUSTED_PROXY`, `IP_HASH_SECRET` and `SAMPLE_RUN_ID` (both required with `APP_ENV=prod`, or the API will not start), `API_STORE=memory`. At most 2 plans run at once with up to 10 waiting; a 13th request gets 503 `busy`. The queue is in one process, like the per-minute limiter.
-
-## Run the frontend
-
-The app is `frontend/` (React, Vite, TypeScript, Tailwind). In production FastAPI serves the built app itself, so the page and the API share one origin: no CORS, and the visitor cookie just works. Unknown paths that are not `/api` return `index.html`, so a reload of `/runs/<id>` works.
-
-```bash
-# one terminal: the API
-cd backend && uv run uvicorn grocery_planner.main:app --port 8000
-# another: the dev server with hot reload (proxies /api to :8000)
-cd frontend && npm ci && npm run dev          # http://localhost:5173
-
-# or build once and let FastAPI serve it
-cd frontend && npm run build                  # then open http://localhost:8000
-```
-
-Checks: `npm run typecheck`, `npm run lint`, `npm test` (Vitest and Testing Library), `npm run e2e` (a Playwright smoke test with every `/api` route mocked). The API types in `frontend/src/api/types.ts` are generated from the OpenAPI schema (`npm run gen:types`); CI regenerates them and fails if the committed file differs.
-
-**Try an example.** The form has four ready-made plans, each checked against the seeded prices to give a different answer: a close call (Friday dinner), one store clearly wins (Sunday lamb), worth splitting the shop (lamb and pork weekend) and an answer that depends on a special ending soon (big chicken BBQ). They work because the seed has two deliberate price gaps (lamb chops are much cheaper at Coles, pork chops much cheaper at Woolworths) on top of the existing Woolworths chicken special.
-
-**How it worked.** Every run page has a collapsed "How it worked" panel (it reads `/api/runs/{id}/steps`, so it works on shared links): one row per step with the model, requests, tokens and latency, expandable to cache hits, price downgrades by reason, tool calls (what-if split arguments and results) and how many of the run's reserved requests were used. No prompts are shown.
-
-**Sample run.** `SAMPLE_RUN_ID` (the run shown when the day's free capacity is used up) should be a completed run that does not go stale. The split-the-shop run `f95caaf0-a6fc-4587-9395-7422e48bf67d` in the project's Supabase database is the one chosen; set it as `SAMPLE_RUN_ID` in production.
-
-![The result, with a special-driven verdict](docs/screenshots/desktop-hero-conditional.png)
-![The how-it-worked panel](docs/screenshots/desktop-trace-panel.png)
-
-
-## Database: migrate, seed, integration tests
-
-With `SUPABASE_DB_URL` set in `backend/.env`:
-
-```bash
-cd backend
-uv run python -m grocery_planner.db.migrate          # applies db/migrations/*.sql once each, in one transaction
-uv run python -m grocery_planner.db.seed             # upserts the catalogue; optional arg: anchor date YYYY-MM-DD
-uv run pytest -m integration                         # price source equivalence, idempotent migrations, RLS check
-```
-
-Seed dates are relative ("special ends in 3 days"), so re-run the seed daily to keep specials current; it resolves against today in Australia/Sydney unless you pass an anchor date. The integration tests also run the seed with today's anchor.
-
-To get plain SQL instead: `uv run python -m grocery_planner.tools.seed_sql [anchor] > ../db/seed/price_catalogue.sql`.
+![A verdict that depends on a special ending](docs/screenshots/desktop-hero-conditional.png)
 
 ## Evals
 
-`backend/evals/` holds 39 eval cases (12 ingredient, 12 price, 11 planner, 4 end to end) in `evals/cases/*.yaml`. Every check is deterministic (no LLM judge yet): required items, quantity ranges, avoid word lists, allowed product ids and tiers, pack gaps, specials, the planner's verdict, override reasons and "no invented dollar amounts". Runs use a separate key (`GEMINI_EVAL_API_KEY`, never the demo key), `APP_ENV=eval`, `bypass_cache=True`, the fallback model off, and a fixed `as_of` of 2026-10-14 (a Wednesday).
-
-```bash
-cd backend
-uv run python -m evals.run                       # everything, default model
-uv run python -m evals.run --agent planner       # one agent (repeatable)
-uv run python -m evals.run --model gemini-3.5-flash-lite --repeat 3
-uv run python -m evals.run --list
-```
-
-It writes `evals/results/<timestamp>-<model>.json` and a markdown summary, and exits 1 if an agent is more than 10 points below `evals/baseline.json`, below its floor (ingredient 85%, price 85%, planner 90%), or if any answer came from a fallback model. A full run takes about 5 minutes at the 12 requests a minute limit, so it is not part of the normal test run.
-
-Request counting: a case's call limit counts model calls (first calls and tool rounds); repairs and transport retries (5xx, timeouts, per-minute 429s) are reported but never fail a case, and a per-day 429 stops the run with exit code 3 instead of producing failures. The three end-to-end cases all expect "no meaningful difference" because the seeded prices are close; the planner cases cover the other outcomes (one store, split, and the two overrides).
-
-**Scores (approved baseline).** Pass rate over scored case runs, 3 repeats of every case, at the 2026-10-14 anchor, fallback model off. The ingredient, price and planner rows are from the full 39-case run on 2026-10-15; the end-to-end row for 3.1 is from the re-run after the stopped-run case was replaced (the 3.5 end-to-end figure still includes the old case).
+39 cases in [backend/evals/cases](backend/evals/cases): ingredient 12, price 12, planner 11, end to end 4. Every check is deterministic, with no LLM judge. They run on a separate API key, `APP_ENV=eval`, no dish cache, the fallback model off (a case fails if anything but the pinned model answered), and a fixed date (2026-10-14, a Wednesday) so seeded specials never drift. Temperature stays at 0.1, so a case can pass once and fail the next time; the baseline comes from 3 repeats.
 
 | Agent | Cases | `gemini-3.1-flash-lite` (default), mean / min | `gemini-3.5-flash-lite`, mean / min |
 | --- | ---: | ---: | ---: |
@@ -164,29 +78,73 @@ Request counting: a case's call limit counts model calls (first calls and tool r
 | Planner | 11 | 100% / 100% | 100% / 100% |
 | End to end | 4 | 100% / 100% | 91.7% / 75.0% |
 
-Cost of one full set on the paid tier is about $0.19 for 3 repeats on 3.1 against $0.31 on 3.5 (roughly $0.06 and $0.10 a set); average latency per case is 6.3 s against 7.1 s (15.6 s against 21.0 s end to end).
+3 repeats each, run on 2026-10-15 (end to end for 3.1 re-run on 2026-10-15 after one case was replaced; the 3.5 end-to-end figure still includes the old case). Repairs: 0 for 3.1, 8 for 3.5. Would-be paid-tier cost for the 3 repeats: $0.19 against $0.31. Average case latency: 6.3 s against 7.1 s.
 
-**Why 3.1 is the default:** it is at least as accurate as 3.5 on this set and cheaper and faster. The two failures only 3.5 had are both ingredient cases: it put spaghetti and penne into a gluten-free bolognese on one repeat (both answers broke the avoid guard, so the repair failed), and on one repeat it returned the injected dish name as an ingredient. 3.1 needed no repairs at all.
+**CI gate.** The evals run on pushes that touch the agents, prompts, model layer, tools, evals, fixtures or seed, and on demand. The run fails if an agent is more than 10 points under the approved baseline (`backend/evals/baseline.json`, 100% for every agent), under a floor (ingredient 85%, price 85%, planner 90%), if more than 25% of an agent's runs were lost to infrastructure errors, or if any answer came from a fallback. A provider 5xx, timeout or per-minute 429 is never a failure of a case: it is reported and not scored. The latest CI run (2026-10-18, commit `45685b5`, 1 repeat) passed 39 of 39.
 
-The stop path (too many items not found, or too few comparable) is tested offline in `tests/test_orchestrator.py`: the run stops, keeps the ingredient list, gives the user a message and never runs the planner. The live end-to-end case `e2e-unusual-dishes` (dragon fruit, saffron and kangaroo) accepts either outcome and checks that any swapped food is named in the assumptions.
+**Why 3.1 is the default.** It is at least as accurate as 3.5 on this set, about 40% cheaper and a little faster, and the failures only 3.5 had were real ones: spaghetti and penne in a gluten-free bolognese, and an injected dish name returned as an ingredient. 3.5 is the fallback model.
 
-CI: `.github/workflows/ci.yml` runs ruff, the unit tests and the integration tests (against a Postgres service container) on every push and pull request. `.github/workflows/evals.yml` runs the evals when agents, prompts, the model layer, the evals, fixtures or the catalogue change, or on demand. It needs the repository secret `GEMINI_EVAL_API_KEY`.
+## Guardrails and safety
 
+![The screen shown when the day's free capacity is used up](docs/screenshots/desktop-unavailable.png)
 
-## Known limitation: Supabase free tier pauses
+- **Request budget and day stop.** Requests, not runs, are counted per model and per Pacific day: 350 a day (70% of 500), with new runs admitted only up to 298 so runs in flight can finish. A run reserves its worst case up front. When the day is used up, or Google says its quota is gone, the form is replaced by an "unavailable" screen with the reset time and a link to the sample run. A billing refusal (HTTP 402) shows "Temporarily unavailable" with no time, because nothing resets it by itself.
+- **Visitor and IP limits.** 5 runs per visitor (an anonymous cookie) and 20 per IP per Pacific day. The IP is stored only as a hash with a salt that changes daily. These are bypassable (see below).
+- **Input caps.** Lengths on every field, 1 to 12 people, 1 to 14 days, at most 7 meals and 20 dishes, a 32 KB body limit. The what-if tool is only offered when a split could clear the threshold.
+- **Avoid guard.** A table maps known avoid words (dairy, gluten, nuts, peanuts, eggs, shellfish, fish, pork, beef, meat, soy) to the ingredients they forbid. A forbidden ingredient sends the answer back for one repair, and a second violation fails the step rather than shipping it.
+- **Prompt-injection output guard: bounded, not eliminated.** Form text is data, never instructions, and every output is validated. An out-of-vocabulary ingredient name must be at most 4 words and 40 characters, letters only, and must not repeat 3 or more words of the dish text; a violation gets one repair, then the item is dropped with a note and nothing is cached. It does not catch a model that returns a single odd word as an ingredient name.
+- **Database.** Row Level Security is on for every table with no policies; only the backend talks to the database.
+- **No secrets in images or the repo.** `.env*` is excluded from the build, secrets are mounted from Secret Manager and readable only by the runtime service account, and a scan of the full git history found none.
+- **Keyless deploy.** GitHub Actions deploys through Workload Identity Federation, limited to this repository on `main`, with no service-account key.
 
-Free Supabase projects can pause after inactivity. In production Cloud Scheduler calls `/internal/daily` every day at 00:10 Sydney; the job re-seeds the prices (a write), which keeps the project active. Check Supabase's current free-tier terms. If you run the app elsewhere you need your own daily call.
+## Observability
 
-## Tracing (Langfuse)
+Each run is one Langfuse trace (`plan_run`, tagged with the environment, prompt versions and model): a span per step, a generation per model request, and the what-if calls under the planner. A normal run is 7 observations. Cost shown is what the request would cost on Google's paid tier; the free tier charges nothing. No visitor id or IP ever goes into a trace.
 
-Set `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` and `LANGFUSE_HOST` (the host of your project's region) in `backend/.env`; without the keys tracing is simply off, and `LANGFUSE_ENABLED=false` switches it off even with them. `APP_ENV` (`dev`, `eval` or `prod`) tags every trace.
+The run page also has a public **How it worked** panel, read from the app's own `run_steps` table, so it works on shared links without exposing the tracing account: a row per step with model, requests, tokens and latency, expandable to dish-cache hits, price downgrades by reason, tool calls and how many of the run's reserved requests were used. No prompts are shown.
 
-Each run is one trace named `plan_run` (its id is derived from the run id and stored in `runs.langfuse_trace_id`): a span per step, a generation per model request, and the planner's what-if calls under the planner span. That is about 7 observations for a normal run, so the free plan (50,000 units a month) covers several thousand runs. The cost Langfuse shows is what the run would cost on Google's paid tier; the free tier actually charges nothing. Langfuse keeps 30 days of history, while `run_steps` stays in your database. The CLI prints the trace id and URL after a run.
+![The How it worked panel](docs/screenshots/desktop-trace-panel.png)
 
-A tracer error never affects a run. Tests use a recording tracer and an in-memory exporter, so no network is needed.
+## Lessons learned
 
-## Known limitations
+Each of these is a decision in [docs/DECISIONS.md](docs/DECISIONS.md), with the numbers.
 
-- Production runs on **one** Cloud Run instance (the queue and limiter are in memory), scales to zero (a cold start of about 7 s), and shares its Supabase database and Gemini free quota with development. When the day's free quota is gone the site says so and links to a sample run. Details in [docs/DEPLOY.md](docs/DEPLOY.md).
-- Per-visitor limits (5 runs per visitor and 20 per IP per Pacific day) rely on a cookie and an IP, so they can be bypassed by clearing the cookie or changing IP. There are no accounts.
-- The per-minute request limiter lives in one process; running several backend processes would multiply the limit.
+- **The pack-size rule did not fit real shopping lists.** The spec compared each pack with the amount needed and called anything beyond 15% a substitute. On live runs fries (300 g needed, 1 kg pack), mayonnaise (60 g, 400 g jar) and similar items became substitutes, only 2 of 5 and 3 of 7 items were comparable, and the stop rule tripped. Pack size no longer changes a match; code compares the two stores' purchased quantities and raises a `pack_gap` flag. The same lists went to 5 of 5 and 7 of 7.
+- **The model I planned to build on was closed to new projects.** Gemini 2.5 Flash-Lite was limited to existing users, so the build started on 3.5 Flash-Lite. The model is now a setting chosen by eval score, and the probe command re-checks any model with one request.
+- **Both models had outages.** 3.5 returned 504 on every call with my key for a while, and later 3.1 returned 503 "high demand" for minutes. I added the fallback model (its own budget, the whole call re-run, tool conversation restarted) and made timeouts retry once instead of three times, which cut a persistent 504 from about 90 s to about 40 s.
+- **The evals found a leak and a failure the unit tests had not.** On 3.5 a gluten-free bolognese came back with penne, and an injected dish name came back as an ingredient. I added the avoid guard and a same-food check (a wrong-food pick is capped at substitute), and later, when the injection case failed once on 3.1 in CI, the name guard. The CI run after that passed 39 of 39.
+- **A billing problem on a key project looked like the model failing.** One CI evals run had every call refused with 402 "credits depleted" and scored 0%. A 402 is now a billing stop: never retried, one fallback attempt, then the day stops with "Temporarily unavailable", and the eval harness aborts as a quota stop instead of scoring zero.
+- **My latency numbers were measuring my own timeout.** I set per-agent timeouts from `latency / requests` in `run_steps`, and the planner's 13.9 s p95 included calls that hung until the old 20 s limit and were retried. I set the planner to 12 s by hand and noted that all three values get revisited from successful-request latencies in Langfuse after a week of traffic.
+- **Seeded specials went stale.** Fixed dates in the seed drifted into the past. The seed now stores relative dates and weekly sale cycles (Wednesday to Tuesday), a daily job re-seeds with today's Sydney date, and the sample run is a split because a "shop by Tue 20 Oct" verdict reads as stale once that date has passed.
+- **One eval case had the wrong premise.** `e2e-stopped-run` assumed three exotic dishes would stop a run, but the models substitute foods and the run completes. I replaced it with a case that accepts either outcome and checks that any swapped food is named, and covered the stop path offline.
+
+## Limitations and what I'd change at scale
+
+- **Prices are seeded and fictional.** A live source would sit behind the same lookup interface, with freshness checks.
+- **One Cloud Run instance**, because the queue, the per-minute limiter and the sweeps are in memory. At scale: a shared queue and limiter, then more instances.
+- **Development and production share one Supabase database and one Gemini quota.** A laptop run spends the same free-tier requests. At scale: separate environments and a paid key per environment.
+- **Visitor and IP limits are bypassable** (clear the cookie, change IP). There are no accounts. At scale: authenticated users and per-account quotas.
+- **A small eval set.** 39 cases, deterministic checks only, 1 repeat in CI (3 for the baseline). The quality of the planner's wording is not scored. At scale: larger sets, production sampling and a judge for the fuzzy questions.
+- **Cold start of about 6.6 s** after idle (one sample); `--min-instances 1` removes it for roughly $50 a month.
+- **Free-tier models.** The quota can run out for the day and the 500-requests-a-day figure is an assumption I could not confirm in Google's public docs. Latency swings with Gemini's load (the same request took 11 s one day and 45 s another).
+- **The prompt-injection guard is bounded**, as described above, and run links are public to anyone who has them.
+- **The measured numbers come from 20 test runs**, not from user traffic.
+
+## Run it locally and deploy
+
+Backend and tests need only [uv](https://docs.astral.sh/uv/) and no database or network:
+
+```bash
+cd backend && uv sync && uv run pytest -m "not integration and not live" && uv run ruff check .
+cd ../frontend && npm ci && npm test
+```
+
+To run the app: `API_STORE=memory uv run uvicorn grocery_planner.main:app` in `backend/` and `npm run dev` in `frontend/` (no database, seed-file prices; add a `GEMINI_API_KEY` to plan for real). Every setting is listed in [.env.example](.env.example). Full instructions, the API, the CLI, the database and the evals are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md). Deployment (the commands and why, rollback, rotating a secret, costs, the smoke test) is in [docs/DEPLOY.md](docs/DEPLOY.md).
+
+**Stack.** Python 3.12, FastAPI, Pydantic v2, psycopg 3 · Supabase Postgres · Gemini 3.1 Flash-Lite through `google-genai` (3.5 Flash-Lite as fallback) · React 19, Vite, TypeScript, Tailwind 4 · Langfuse · Cloud Run, Cloud Build, Secret Manager, Cloud Scheduler · GitHub Actions · uv, ruff, pytest, Vitest, Playwright.
+
+**Tests.** 571 backend (527 unit, 28 integration against Postgres, 16 live against Gemini), 60 frontend unit and 2 browser smoke tests, all green in CI.
+
+## License
+
+[MIT](LICENSE).

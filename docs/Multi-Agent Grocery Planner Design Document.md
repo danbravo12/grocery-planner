@@ -1,6 +1,6 @@
 # Multi-Agent Grocery Planner: Design Document
 
-Oct 13, 2026 · @Daniel
+Oct 13, 2026 · @Daniel · synced to the finished build on 2026-10-19 (v1.0.0). The history of every choice is in [DECISIONS.md](DECISIONS.md); the figures are in [NUMBERS.md](NUMBERS.md).
 
 ## Overview and goals
 
@@ -23,7 +23,32 @@ This is a public web app where a user describes the meals they plan to cook, and
 
 A run moves through three agents in a fixed order, and only the planner can send work back, once.
 
-&#91;embedded content: architecture · 3 agents, 1 loop-back\]
+```mermaid
+flowchart TD
+    form["Form"]:::code --> ingM["Ingredient agent (model)"]:::model --> ingC["Scale, merge, guards (code)"]:::code
+    ingC --> cand["Candidates per item per store (code)"]:::code --> priceM["Price agent (model)"]:::model
+    priceM --> priceC["Enforce tiers, packs, costs (code)"]:::code --> stop{"Stop check (code)"}:::code
+    stop -- stop --> stopped["Run stops, list kept"]:::code
+    stop -- continue --> verdict["Rule verdict and conditional (code)"]:::code --> plannerM["Planner agent (model)"]:::model --> check["Output checks (code)"]:::code
+    check -- "doubtful items, once" --> reprice["Re-price those items (model)"]:::model --> stop
+    check -- done --> result["Result"]:::code
+    classDef model fill:#fde7c8,stroke:#b45309
+    classDef code fill:#dbeafe,stroke:#1d4ed8
+```
+
+Orange is a model call, blue is code.
+
+## Final architecture
+
+What runs in production (v1.0.0). This section only states the end result; nothing here is new design, and the reasons and the history are in DECISIONS.md.
+
+- **One container on Google Cloud Run in Sydney** serves the React app and the FastAPI API from the same origin. It runs one uvicorn worker (the run queue, the per-minute limiter and the sweeps are in memory), at most one instance, scaled to zero when idle, with CPU kept on while an instance exists so a run continues after its POST returns, and a one-hour request timeout for the event stream. The image is built by Cloud Build; secrets come from Secret Manager; the service runs as a service account that can only write logs and read its five secrets.
+- **Supabase Postgres** in Sydney, reached through the Session pooler, holds runs, step records, the seeded price catalogue, the dish cache and the usage counters.
+- **Gemini 3.1 Flash-Lite** (fallback 3.5 Flash-Lite) on the free tier, through the in-house model layer, with a per-agent request timeout.
+- **Cloud Scheduler** calls `POST /internal/daily` at 00:10 Sydney with a Google identity token the app verifies: it re-seeds the prices, sweeps, prunes and keeps the free database awake.
+- **Langfuse** (Japan region) holds one trace per run; the public trace panel reads the app's own `run_steps`.
+- **GitHub Actions**: CI on every push, evals when the agents or their inputs change, and a manual deploy that uses Workload Identity Federation (no keys).
+- Commands, costs, rollback and the smoke test are in DEPLOY.md.
 
 **Stack**
 
@@ -31,7 +56,8 @@ A run moves through three agents in a fixed order, and only the planner can send
 - **Agents:** Gemini 3.1 Flash-Lite (free tier) behind a swappable model layer (a thin in-house layer over the google-genai SDK). If the primary model is unavailable or out of its daily quota, the same call is retried once on a fallback model (Gemini 3.5 Flash-Lite by default)
 - **Data:** Supabase Postgres
 - **Tracing:** Langfuse, plus step records in the app's own database for the public trace panel
-- **Frontend:** React and Vite
+- **Frontend:** React and Vite, served by the API
+- **Hosting:** Google Cloud Run (Sydney), built by Cloud Build
 
 ## Input form
 
@@ -78,7 +104,7 @@ This agent turns the meal form into one consolidated, quantity-scaled list of pu
 
 ## Price agent
 
-This agent finds a comparable product for each purchasable item at each store and works out what it costs to buy the amount needed. The MVP stores are Coles, Woolworths and optionally Aldi.
+This agent finds a comparable product for each purchasable item at each store and works out what it costs to buy the amount needed. The built stores are Coles and Woolworths. Aldi exists in the store list but has no seeded rows, so it is not compared.
 
 **Input:** the purchasable items list and the stores to check.
 
@@ -165,6 +191,7 @@ The orchestrator runs the three agents in a fixed sequence, with one controlled 
 | Fewer than 50% of items comparable across all stores | Stop and tell the user |
 | Transient error (timeout, rate limit) | Automatic retry with backoff, then one retry on a fallback model, before counting as a failure |
 | Output that fails validation twice, model unavailable, or quota used up | Run fails with a clear message; the ingredient list and every completed step are kept. Daily quota exhaustion is recorded as `daily_quota` for the day-stop logic |
+| Provider billing refusal (HTTP 402) | Not retried; one fallback attempt; then the run fails as `provider_billing` and the day stops (see Guardrails) |
 | Run takes longer than 180 s | Run fails with reason `timeout` |
 | Run stops writing for 5 minutes | A sweep marks it failed (`stale`) |
 | Item not found | Never retried blindly; this is what the loop-back is for |
@@ -206,6 +233,7 @@ Guardrails protect the free Gemini quota and keep a single run from costing too 
 - New runs are admitted only while used plus reserved plus the new estimate fits under the admission limit: the daily limit minus a 15% buffer (298 of 350). Runs already started can use the buffer to finish, up to the daily limit.
 - The fallback model has its own counter and daily limit. When it is used up, or Google says its daily quota is gone, the fallback is switched off for the rest of the day and calls behave as if none were configured.
 - The day is flagged stopped when the primary can no longer admit runs, or when Google returns a per-day quota error for the primary, whatever our counter says.
+- A billing refusal from Google (HTTP 402, credits depleted) is never retried and falls back once; if the fallback fails too the day stops with the reason `provider_billing`. The screen then says "Temporarily unavailable" with no reset time (nothing resets a billing problem by itself) and still links the sample run. It is cleared by hand once the credit is fixed (DEPLOY.md).
 - A per-minute limiter in the model layer (12 requests a minute per model) makes a request wait for a slot, up to 30 seconds, then fails as unavailable.
 - Once the cutoff is hit, the form is replaced by an "unavailable today" message with the reset time and a link to a sample run.
 - If the buffer itself runs out mid-run, that run fails cleanly with a clear message.
@@ -215,7 +243,7 @@ Guardrails protect the free Gemini quota and keep a single run from costing too 
 
 **Input validation:** length limits and type checks on every field, the ranges 1 to 12 people and 1 to 14 days, and at most 20 dishes (mains plus sides) across all meals, which together cap the cost of any single run. The planner's what-if tool is only offered when the best possible split could clear the savings threshold; otherwise it could not change the answer and the planner makes a single plain request.
 
-**Prompt injection:** all form fields are treated as data, never as instructions. Every agent output is validated against its schema, and no agent has a tool that can do anything harmful. A visible "flagged input" path is out of scope for the demo.
+**Prompt injection:** all form fields are treated as data, never as instructions. Every agent output is validated against its schema, and no agent has a tool that can do anything harmful. Code also guards the ingredient agent's output: an out-of-vocabulary ingredient name must be at most 4 words and 40 characters, use only letters, spaces, hyphens and apostrophes, and not repeat 3 or more words of the dish text it came from; a violation gets the one repair, and if it persists the item is dropped with an assumption and nothing is cached. This bounds the damage; it does not eliminate injection (a model that returns a single odd word as a name is not caught). A visible "flagged input" path is out of scope for the demo.
 
 ## Observability and evals
 
@@ -273,12 +301,13 @@ The frontend is a React single-page app built with Vite, calling the FastAPI bac
 - `step_completed` (with a short summary)
 - `loopback`
 - `run_completed`
-- `run_failed`
-- `unavailable`
+- `run_failed` (also used for a stopped run)
+
+`unavailable` is not a stream event: the form reads `/api/availability`.
 
 On a reconnect, the client reloads the run's stored state and then resumes streaming. The chosen host must allow long-lived streaming responses, since some serverless platforms cut them off.
 
-**Trace panel:** a simple "how it worked" panel on the result page shows each agent's inputs, outputs, tool calls, tokens and latency, read from `run_steps`.
+**Trace panel:** a collapsed "how it worked" panel on the result page shows each step's model, requests, tokens, latency, tool calls, price downgrades and cache hits, read from `run_steps`. It never shows prompts or step inputs.
 
 **Built (step 13).** One React 19 app, Vite, strict TypeScript, Tailwind 4, react-router, with three routes: `/` (the form), `/runs/:id` (progress while running, the result when done) and a not-found page. It is served by FastAPI from `frontend/dist` on the same origin as `/api` (index.html for unknown non-API paths), so there is no CORS and the HttpOnly visitor cookie works; in development Vite proxies `/api` to :8000. The API types are generated from the OpenAPI schema and CI fails if they are stale.
 
@@ -295,7 +324,7 @@ FastAPI, JSON in and out, errors as `{code, message}` (validation errors add `fi
 | Endpoint | Purpose |
 | --- | --- |
 | `GET /health` | Liveness |
-| `GET /api/availability` | `{available, reason, reset_at_utc, reset_at_sydney, sample_run_id}` for the form and the "unavailable today" screen |
+| `GET /api/availability` | `{available, reason, message, reset_at_utc, reset_at_sydney, sample_run_id}` for the form and the "unavailable today" screen. `reason` is `day_budget`, `google_quota` or `provider_billing`; for `provider_billing` both reset times are null |
 | `POST /api/runs` | Body: the meal form plus optional `parameters` (the advanced settings). 202 `{run_id, run_url, events_url}` |
 | `GET /api/runs/{id}` | The public run view: request, parameters used, status, ingredient list, per-store comparison, recommendation (with the verdict's condition), flags, assumptions, totals, models and would-be cost. 404 for an unknown id |
 | `GET /api/runs/{id}/steps` | Public step records for the trace panel: summaries, tool calls, tokens, latency, model, fallback, the error class name only |
@@ -335,7 +364,7 @@ Every parameter has a default and a clamped range, and the values used are store
 | Visitor and IP limits | 5 runs per visitor, 20 per IP, per Pacific day | Fixed | No |
 | Dishes per request | At most 20 (mains plus sides) | Fixed | No |
 | Run deadline | 180 s | Fixed | No |
-| Retries | 20s timeout; timeouts/504 retried once; other transient errors 3 attempts with backoff 1s, 2s plus jitter; 429s honour retryDelay up to 20s | Fixed | No |
+| Retries and timeouts | Per-request timeout by agent: ingredient 12 s, price 25 s, planner 12 s (20 s elsewhere; override `GEMINI_TIMEOUT_<AGENT>_S`, clamped to 8 to 25 s); timeouts and 504 retried once; other transient errors 3 attempts with backoff 1s, 2s plus jitter; 429s honour retryDelay up to 20s; a 402 is never retried | Fixed | No |
 | Schema repair | 1 attempt when an agent's output fails validation | Fixed | No |
 | Loop-back count | 1 | Fixed | No |
 
@@ -358,20 +387,25 @@ Every parameter has a default and a clamped range, and the values used are store
 | Cold start of about 7 s after idle | Scale to zero keeps an idle demo free | `--min-instances 1` (about $50 a month) |
 | Gemini keys are kept in unbilled projects | A leaked key cannot run up a bill | A paid key with a hard budget cap, once there is real traffic |
 
-## Open items to decide before building
+## Open items (all closed)
 
-- [ ] Read the Gemini 3.1 Flash-Lite limits from the AI Studio rate-limit page, then set the daily budget and buffer
-- [x] Check Google's deprecations page for 2.5 Flash-Lite before building (done: 2.5 is limited to existing users, so the build uses 3.5)
-- [ ] Hosting that allows long-lived streaming responses
-- [ ] Whether the first seeded catalogue covers Aldi or only Coles and Woolworths
-- [ ] The sample run shown on the unavailable-today screen
-- [ ] The week-by-week build plan (drafted in the Build plan section; confirm the start date)
+- [x] Read the Gemini 3.1 Flash-Lite limits from the AI Studio rate-limit page, then set the daily budget and buffer. Closed with an assumption: the public docs did not list a per-model figure, so the free tier is taken as 500 requests a day; 70% is 350 and a 15% buffer gives an admission limit of 298 (DECISIONS.md, steps 4 and 9). It stays an assumption.
+- [x] Check Google's deprecations page for 2.5 Flash-Lite before building (done: 2.5 is limited to existing users, so the build started on 3.5; the default became 3.1 after a 3.5 outage and the eval comparison)
+- [x] Hosting that allows long-lived streaming responses: Google Cloud Run, with a one-hour request timeout
+- [x] Whether the first seeded catalogue covers Aldi or only Coles and Woolworths: only Coles and Woolworths (Aldi is a store-list entry with no seeded rows)
+- [x] The sample run shown on the unavailable-today screen: the split-the-shop run `f95caaf0-a6fc-4587-9395-7422e48bf67d`, chosen because it does not go stale
+- [x] The week-by-week build plan: confirmed and finished early (see Build plan)
 
 ## Build plan
 
-The build takes four weeks and runs bottom-up: the deterministic and testable parts first, the interface last. The backend is then built and tested without a UI, and evals exist before the frontend does.
+The build was planned for four weeks and run bottom-up: the deterministic and testable parts first, the interface last. **Status: done, v1.0.0 released on 2026-10-19.** The whole build took six days (design 2026-10-13, first commit 2026-10-14, deployed 2026-10-18), not four weeks; the dates come from the git history and DECISIONS.md.
 
-&#91;embedded content: build plan · 4 weeks, 4 gates\]
+| Gate | What | Done |
+| --- | --- | --- |
+| 1. Foundations | Seeded catalogue, price lookup, the planner's arithmetic and decision rule, schema and migrations (steps 1 to 3) | 2026-10-14 |
+| 2. Agents | Model layer with fallback, ingredient agent, price agent, planner agent, orchestrator, guardrails, Langfuse tracing (steps 4 to 10) | 2026-10-14 |
+| 3. Evals and conditional verdict | Evals and CI, avoid guard and same-food check, weekly specials and the conditional verdict, approved baseline (steps 11 to 11d) | 2026-10-15 to 2026-10-16 |
+| 4. Interface and launch | API, frontend, trace panel and examples (steps 12 to 14), hardening (14b to 14d), Cloud Run deployment and per-agent timeouts (steps 15 and 15b), write-up and v1.0.0 (step 16) | 2026-10-16 to 2026-10-19 |
 
 **Why this order**
 

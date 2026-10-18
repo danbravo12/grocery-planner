@@ -1,6 +1,41 @@
 # Decisions log
 
-Choices made in step 1 that the design doc did not specify. Newest decisions go at the bottom.
+Every choice the design document left open, and everything that broke, one section per build step, newest at the bottom. Numbers and dates are from the step they belong to; the final state is in the [design document](Multi-Agent%20Grocery%20Planner%20Design%20Document.md) and the figures quoted in the README are in [NUMBERS.md](NUMBERS.md).
+
+## Contents
+
+- [Tooling](#tooling)
+- [Domain](#domain)
+- [Schema (db/migrations/001_init.sql)](#schema-dbmigrations001_initsql)
+- [Seed](#seed)
+- [Price lookup](#price-lookup)
+- [Step 1b](#step-1b)
+- [Step 2 (planner tools)](#step-2-planner-tools)
+- [Step 2b](#step-2b)
+- [Step 3 (Supabase)](#step-3-supabase)
+- [Step 4 (model layer)](#step-4-model-layer)
+- [Step 4b](#step-4b)
+- [Step 5 (ingredient agent)](#step-5-ingredient-agent)
+- [Step 6 (price agent)](#step-6-price-agent)
+- [Step 6b (pack-size tolerance compares stores)](#step-6b-pack-size-tolerance-compares-stores)
+- [Step 7 (planner agent, model fallback)](#step-7-planner-agent-model-fallback)
+- [Step 7 follow-ups](#step-7-follow-ups)
+- [Step 8 (orchestrator)](#step-8-orchestrator)
+- [Step 9 (guardrails)](#step-9-guardrails)
+- [Step 10 (Langfuse tracing)](#step-10-langfuse-tracing)
+- [Step 11 (evals and CI)](#step-11-evals-and-ci)
+- [Step 11b (eval counting, same-food check, avoid guard)](#step-11b-eval-counting-same-food-check-avoid-guard)
+- [Step 11c (weekly specials, conditional verdict)](#step-11c-weekly-specials-conditional-verdict)
+- [Step 11d (eval baseline)](#step-11d-eval-baseline)
+- [Step 12 (the API)](#step-12-the-api)
+- [Step 13 (frontend)](#step-13-frontend)
+- [Step 14 (trace panel, presets, polish)](#step-14-trace-panel-presets-polish)
+- [Step 14b (split hero, reset time)](#step-14b-split-hero-reset-time)
+- [Step 14c (injection output guard, 499 as infrastructure)](#step-14c-injection-output-guard-499-as-infrastructure)
+- [Step 14d (402 as a billing stop)](#step-14d-402-as-a-billing-stop)
+- [Step 15 (deploy to Cloud Run)](#step-15-deploy-to-cloud-run)
+- [Step 15b (per-agent timeouts, billing message)](#step-15b-per-agent-timeouts-billing-message)
+- [Step 16 (the write-up)](#step-16-the-write-up)
 
 ## Tooling
 - **uv installed via a throwaway venv.** The machine had no uv and Python 3.10; uv fetched Python 3.12 itself. `.python-version` pins 3.12 and `requires-python` is `>=3.12,<3.13`.
@@ -470,3 +505,14 @@ Full runbook, commands with their reasons, costs and the smoke test: [DEPLOY.md]
 - First run: auth through Workload Identity Federation worked (no key); `gcloud builds submit` failed with "forbidden from accessing the bucket". Two missing permissions, found in order: `storage.buckets.get` on the Cloud Build bucket (added `roles/storage.legacyBucketReader` on that bucket only, with Daniel's OK) and then `storage.buckets.list` on the project, used by gcloud's anti-name-squatting ownership check. I read gcloud's source (`storage_api.CreateBucketIfNotExists`): the check only runs for the default staging dir, so the workflow now passes `--gcs-source-staging-dir gs://<project>_cloudbuild/source` and the deployer gets no project-wide storage role.
 - Third failure: the build **succeeded** (image pushed) but `gcloud builds submit` exited 1 because it could not stream the build logs (that needs project Viewer or Owner). `--suppress-logs` did not help (the log-bucket check still ran), so the workflow now submits with `--async` and polls `builds describe` until SUCCESS (failing on FAILURE, CANCELLED, TIMEOUT and so on, or after 15 minutes). No new IAM; the build link is printed and logs are in the Cloud Build console.
 - A test I had written (`test_daily.py`) hard-coded the date and failed the day after it was written; it now pins today's date. I had also chained a push after a failing test run: the push (`88e7461`) went out with that red test, and the fix followed (`a019e38`).
+
+## Step 16 (the write-up)
+- **Numbers** are in [NUMBERS.md](NUMBERS.md), each with its query or source and the date. The run statistics come from the 20 completed runs of the last 7 days in the shared Supabase database (median end-to-end 10.2 s, p90 31.4 s, median 3 requests, no fallback, 64.7% of ingredient dishes from cache, median would-be cost $0.0028 over the 17 runs that have a cost). They are the author's test and smoke runs, not traffic, and the page says so. Daily capacity is 298 / 3 = 99 runs at the median (33 if every run used its 9-request worst case). Test counts are from `pytest --collect-only` (571: 527 unit, 28 integration, 16 live) and Vitest (60), not from memory.
+- **Two corrections made while writing:** the opening of NUMBERS.md first said "no public traffic", which I cannot know (the table has no visitor marker), so it now says what is known; and the README's cost and latency strip names its sample ("20 completed runs, my own test runs").
+- **README restructured** as the front page: pitch, live link, a hero screenshot taken from the live sample run, a 4-number strip, a Mermaid flowchart (model calls orange, code blue), design decisions as "chose X over Y because Z", evals, guardrails, observability, lessons, limitations. The rewritten flowchart was rendered with mermaid 11.4.1 in the browser pane to check it parses (an earlier numbered subgraph title was read as a Markdown list and was renamed). The old README's setup, API, CLI, database and evals commands moved unchanged to [DEVELOPMENT.md](DEVELOPMENT.md); `docs/README.md` indexes all docs.
+- **Rationale wording:** where a bullet says "chose X over Y because Z", Z is taken from the step that made the choice (for example batching for the request budget, step 5; the fallback after the model outages, steps 4 and 7). For the model layer the repo records what it had to do (a hook before and after every send, retries by failure type, one repair, a tool conversation restarting on another model), not a comparison of specific frameworks, so the README states those requirements and does not name alternatives.
+- **Repo hygiene.** MIT `LICENSE`, with the holder given as the GitHub handle `danbravo12` because I do not know the legal name (edit it if you want your name there). A table of contents at the top of this file. `.env.example` now lists every setting the code reads: it was missing `GEMINI_EVAL_API_KEY`, `GEMINI_TIMEOUT_<AGENT>_S`, `FRONTEND_DIST`, `DAILY_JOB_AUDIENCE`, `DAILY_JOB_SA_EMAIL`, `LANGFUSE_ENABLED`, `API_STORE` and the `LANGFUSE_BASE_URL` alias (the list was produced by grepping the code for `getenv` and `os.environ`). Screenshots: five unused or superseded images deleted (the form, the full-page split, the two phone shots and the phone unavailable screen), four kept and all four used by the README; `frontend/scripts/hero-shot.mjs` makes the hero.
+- **Secret scan over the full history** (gitleaks and trufflehog are not installed and I did not download one): a script read every unique blob in all 35 commits (513 blobs) and every commit message, looking for the exact values of six secrets in `backend/.env` (compared in memory, never printed; the database password included) and for patterns (Google API keys, Langfuse keys, private keys, service-account JSON, Postgres URLs with a password, JWTs, GitHub and AWS tokens), and listed any file named like a secret file. Result: no exact value, no secret-looking file name, and one pattern hit, the throwaway password of the CI Postgres container (`postgres:postgres@localhost` in `ci.yml`), which does not equal the real database password. The script is not committed (it holds no secrets but is a one-off).
+- **Design doc synced** without new design: an architecture diagram in place of the broken "embedded content" placeholders, a "Final architecture" section, every open item closed with what was decided (the 500-requests-a-day figure stays an assumption), the build plan marked done with dates (six days, not four weeks), and the places that had drifted corrected: the event list (`unavailable` is not a stream event), the trace panel (no prompts or inputs), the availability response (`provider_billing`, null reset times), the injection guard, the 402 row in the failure table, the per-agent timeouts in the configuration table, Aldi, and hosting.
+- **Release v1.0.0** with release notes linking the live demo, the numbers and the evals.
+- **A file I committed by mistake.** While preparing this step I found `v2_docs/scrapper.py` (a price scraper for the two stores, Daniel's own work in progress) tracked in the repository. My commit `9aa16ae` (step 15b, "deploy workflow suppresses build log streaming") used `git add -A` and swept it in as an untracked file, and that commit is on `origin/main`. The secret scan of the full history covers it and found nothing. I left the file, and Daniel's uncommitted edits to it, alone, staged only the step 16 files by explicit path, and asked Daniel whether to untrack it before the release tag. Lesson: stage by path, never `git add -A`, in a working tree that someone else is also editing.
