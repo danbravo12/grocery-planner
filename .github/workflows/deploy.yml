@@ -41,13 +41,26 @@ jobs:
         run: |
           # An explicit staging dir skips gcloud's bucket-ownership check, which would need
           # storage.buckets.list on the whole project; reading this one bucket is enough.
-          # --suppress-logs: streaming build logs needs a project Viewer role; the logs stay in
-          # the Cloud Build console, and gcloud still waits for the build and fails if it fails.
-          gcloud builds submit . \
+          # --async + polling: waiting inside `builds submit` also streams the build's logs, which
+          # needs a project Viewer role the deployer does not have. Logs stay in the Cloud Build
+          # console (the build id is printed below).
+          build_id=$(gcloud builds submit . \
             --tag "$IMAGE:${GITHUB_SHA::12}" \
             --gcs-source-staging-dir "gs://${PROJECT}_cloudbuild/source" \
-            --suppress-logs \
-            --project "$PROJECT" --region "$REGION"
+            --async --format='value(id)' \
+            --project "$PROJECT" --region "$REGION")
+          echo "Cloud Build $build_id: https://console.cloud.google.com/cloud-build/builds;region=$REGION/$build_id?project=$PROJECT"
+          for i in $(seq 1 90); do
+            status=$(gcloud builds describe "$build_id" --region "$REGION" --project "$PROJECT" --format='value(status)')
+            echo "build status: $status"
+            case "$status" in
+              SUCCESS) exit 0 ;;
+              FAILURE | CANCELLED | TIMEOUT | INTERNAL_ERROR | EXPIRED) echo "build did not succeed" >&2; exit 1 ;;
+            esac
+            sleep 10
+          done
+          echo "build still running after 15 minutes" >&2
+          exit 1
       - name: Deploy the new revision (settings and secrets stay as they are)
         run: |
           gcloud run deploy "$SERVICE" \
