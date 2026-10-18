@@ -212,6 +212,7 @@ def test_post_returns_202_then_events_stream_to_run_completed_and_get_matches():
         assert view["totals"]["request_budget"] == 9  # the reservation: worst case for a run
         assert view["totals"]["would_cost_usd"] is not None
         assert "condition" in view["recommendation"]["rule_verdict"]
+        assert view["recommendation"]["rule_verdict"]["split_total"]
         steps = client.get(f"/api/runs/{run_id}/steps").json()["steps"]
         assert [s["name"] for s in steps] == ["ingredient", "price", "planner"]
         assert all(s["status"] == "completed" and s["model"] == "fake-model" for s in steps)

@@ -473,6 +473,8 @@ export interface components {
             kind: "no_meaningful_difference" | "one_store" | "split";
             /** Split Savings */
             split_savings: string;
+            /** Split Total */
+            split_total?: string | null;
             /** Store */
             store?: string | null;
             /** Threshold */

@@ -47,11 +47,21 @@ describe('the recommendation card', () => {
     expect(screen.getByText('Woolworths is $18.42 cheaper across 2 common items, over the $8.00 threshold.')).toBeInTheDocument()
   })
 
-  it('shows which items to buy elsewhere for a split', () => {
+  it('a split leads with the split total and the cheapest single store, and never marks a store Lowest', () => {
     render(<ResultView run={split()} steps={null} />)
     expect(screen.getByRole('heading', { level: 1, name: 'Split your shop' })).toBeInTheDocument()
+    const totals = totalsOf()
+    expect(totals.getByText('Split').closest('div')).toHaveTextContent('$87.10')
+    expect(totals.getByText('Split').closest('div')?.className).toContain('border-accent')
+    expect(totals.getByText('Coles only').closest('div')).toHaveTextContent('$97.10')
+    expect(totals.queryByText('Lowest')).not.toBeInTheDocument()
+    expect(totals.queryByText('Woolworths')).not.toBeInTheDocument()
     expect(screen.getByText('Splitting saves $10.00 across 2 common items, enough to clear the $8.00 threshold.')).toBeInTheDocument()
-    expect(screen.getByText(/Buy beef mince at Woolworths, and the rest at Coles/)).toBeInTheDocument()
+  })
+
+  it('a split names which items go to which store', () => {
+    render(<ResultView run={split()} steps={null} />)
+    expect(screen.getByText('Coles: eggs. Woolworths: beef mince.')).toBeInTheDocument()
   })
 
   it('explains a conditional verdict: until when it holds and what follows', () => {

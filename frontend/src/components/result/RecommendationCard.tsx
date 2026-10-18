@@ -44,6 +44,18 @@ export function gapLine(run: RunView, rec: Recommendation, stores: string[]): st
     : `${cheaper}; it takes ${threshold} to be worth acting on.`
 }
 
+function Tile({ label, value, mark, highlight }: { label: string; value: string | null | undefined; mark?: string; highlight?: boolean }) {
+  return (
+    <div className={`rounded-lg border p-3 sm:p-4 ${highlight ? 'border-accent bg-accent-soft' : 'border-stone-200 bg-stone-50'}`}>
+      <dt className="flex flex-wrap items-center gap-2 text-sm font-medium text-stone-700">
+        {label}
+        {mark && <Badge tone="accent">{mark}</Badge>}
+      </dt>
+      <dd className="mt-1 font-mono text-3xl font-bold tabular-nums sm:text-4xl">{money(value)}</dd>
+    </div>
+  )
+}
+
 export function RecommendationCard({ run }: { run: RunView }) {
   const rec = run.recommendation
   if (!rec) return null
@@ -54,7 +66,7 @@ export function RecommendationCard({ run }: { run: RunView }) {
   const lowest = stores.reduce<string | null>((best, s) => (best === null || Number(totals[s]) < Number(totals[best]) ? s : best), null)
   const tied = stores.every((s) => Number(totals[s]) === Number(totals[lowest ?? s]))
   const assignment = Object.entries(rec.split_assignment ?? {})
-  const elsewhere = assignment.filter(([, st]) => st !== (lowest ?? ''))
+  const isSplit = rec.recommendation === 'split'
 
   return (
     <section aria-labelledby="verdict" className="rounded-xl border-2 border-accent bg-white p-5 shadow-sm sm:p-8">
@@ -64,28 +76,27 @@ export function RecommendationCard({ run }: { run: RunView }) {
       </h1>
 
       <dl className="mt-5 grid grid-cols-2 gap-3 sm:gap-4" aria-label="Basket totals by store">
-        {stores.map((s) => {
-          const isLowest = !tied && s === lowest
-          return (
-            <div
-              key={s}
-              className={`rounded-lg border p-3 sm:p-4 ${isLowest ? 'border-accent bg-accent-soft' : 'border-stone-200 bg-stone-50'}`}
-            >
-              <dt className="flex flex-wrap items-center gap-2 text-sm font-medium text-stone-700">
-                {title(s)}
-                {isLowest && <Badge tone="accent">Lowest</Badge>}
-              </dt>
-              <dd className="mt-1 font-mono text-3xl font-bold tabular-nums sm:text-4xl">{money(totals[s])}</dd>
-            </div>
-          )
-        })}
+        {isSplit ? (
+          <>
+            <Tile label="Split" highlight value={rec.rule_verdict.split_total} />
+            <Tile label={`${title(lowest ?? '')} only`} value={totals[lowest ?? '']} />
+          </>
+        ) : (
+          stores.map((s) => (
+            <Tile key={s} label={title(s)} mark={!tied && s === lowest ? 'Lowest' : undefined} highlight={!tied && s === lowest} value={totals[s]} />
+          ))
+        )}
       </dl>
       <p className="mt-3 text-lg text-stone-800">{gapLine(run, rec, stores)}</p>
 
-      {rec.recommendation === 'split' && elsewhere.length > 0 && (
+      {isSplit && assignment.length > 0 && (
         <p className="mt-3 text-stone-800">
-          Buy {elsewhere.map(([id, st]) => `${nameOf(run, id)} at ${title(st)}`).join(', ')}, and the rest at{' '}
-          {title(lowest ?? '')}.
+          {stores
+            .map((st) => ({ st, ids: assignment.filter(([, to]) => to === st).map(([id]) => nameOf(run, id)) }))
+            .filter((g) => g.ids.length > 0)
+            .map((g) => `${title(g.st)}: ${g.ids.join(', ')}`)
+            .join('. ')}
+          .
         </p>
       )}
 

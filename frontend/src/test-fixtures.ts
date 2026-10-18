@@ -149,7 +149,7 @@ export const split = () =>
       savings: '10.00',
       split_assignment: { i1: 'woolworths', i2: 'coles' },
       summary_line: 'Splitting the shop (1 of 2 common items bought away from Coles) saves $10.00 (threshold $8.00).',
-      rule_verdict: { kind: 'split', store: null, totals: { coles: '97.10', woolworths: '100.12' }, gap: '3.02', threshold: '8.00', split_savings: '10.00', condition: null },
+      rule_verdict: { kind: 'split', store: null, totals: { coles: '97.10', woolworths: '100.12' }, gap: '3.02', threshold: '8.00', split_total: '87.10', split_savings: '10.00', condition: null },
     }),
   })
 

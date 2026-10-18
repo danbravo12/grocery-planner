@@ -55,7 +55,7 @@ export function localTime(iso: string, timeZone?: string): string {
   const parts = new Intl.DateTimeFormat('en-AU', {
     weekday: 'short',
     day: 'numeric',
-    month: 'short',
+    month: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
@@ -64,5 +64,5 @@ export function localTime(iso: string, timeZone?: string): string {
   }).formatToParts(date)
   const get = (type: string) => parts.find((p) => p.type === type)?.value ?? ''
   const pm = get('dayPeriod').toLowerCase()
-  return `${get('weekday')} ${get('day')} ${get('month')}, ${get('hour')}:${get('minute')} ${pm} ${get('timeZoneName')}`
+  return `${get('weekday')} ${get('day')} ${MONTHS[Number(get('month')) - 1] ?? ''}, ${get('hour')}:${get('minute')} ${pm} ${get('timeZoneName')}`
 }

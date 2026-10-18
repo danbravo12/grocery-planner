@@ -13,6 +13,26 @@ if (!conditional || !split) {
 const out = resolve(outArg)
 mkdirSync(out, { recursive: true })
 
+// The real reset: the next midnight in America/Los_Angeles (07:00 or 08:00 UTC), as the server computes it.
+const nextReset = () => {
+  const pacific = (d) => new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', hourCycle: 'h23' }).format(d)
+  const now = new Date()
+  for (let day = 0; day < 3; day++) {
+    for (const hour of [7, 8]) {
+      const c = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + day, hour))
+      if (c > now && Number(pacific(c)) === 0) return c.toISOString()
+    }
+  }
+}
+const unavailable = (route) =>
+  route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({
+      available: false, reason: 'day_budget', message: 'used up',
+      reset_at_utc: nextReset(), reset_at_sydney: nextReset(), sample_run_id: split,
+    }),
+  })
+
 const browser = await chromium.launch({ channel: process.env.CI ? undefined : 'chrome' })
 const desktop = { width: 1280, height: 900 }
 const phone = { width: 390, height: 844 }
@@ -44,6 +64,13 @@ await page.goto(`${base}/runs/${split}`)
 await page.getByRole('heading', { level: 1 }).first().waitFor()
 await page.waitForTimeout(400)
 await shot(page, 'desktop-split-result.png', { fullPage: true })
+{
+  const phoneSplit = await open(phone, 2)
+  await phoneSplit.goto(`${base}/runs/${split}`)
+  await phoneSplit.getByRole('heading', { level: 1 }).first().waitFor()
+  await phoneSplit.waitForTimeout(400)
+  await shot(phoneSplit, 'mobile-split-result.png')
+}
 const trace = page.locator('details', { has: page.getByText('How it worked', { exact: true }) }).first()
 await page.getByText('How it worked', { exact: true }).click()
 await page.getByText(/1\. Ingredient agent/).waitFor()
@@ -56,30 +83,12 @@ await trace.screenshot({ path: join(out, 'desktop-trace-panel.png') })
 
 // the unavailable screen (availability mocked as used up)
 page = await open(desktop)
-await page.route('**/api/availability', (route) =>
-  route.fulfill({
-    contentType: 'application/json',
-    body: JSON.stringify({
-      available: false, reason: 'day_budget', message: 'used up',
-      reset_at_utc: new Date(Date.now() + 5 * 3600_000).toISOString(),
-      reset_at_sydney: new Date(Date.now() + 5 * 3600_000).toISOString(), sample_run_id: split,
-    }),
-  }),
-)
+await page.route('**/api/availability', unavailable)
 await page.goto(base)
 await page.getByRole('heading', { name: /free AI capacity is used up/ }).waitFor()
 await shot(page, 'desktop-unavailable.png')
 page = await open(phone, 2)
-await page.route('**/api/availability', (route) =>
-  route.fulfill({
-    contentType: 'application/json',
-    body: JSON.stringify({
-      available: false, reason: 'day_budget', message: 'used up',
-      reset_at_utc: new Date(Date.now() + 5 * 3600_000).toISOString(),
-      reset_at_sydney: new Date(Date.now() + 5 * 3600_000).toISOString(), sample_run_id: split,
-    }),
-  }),
-)
+await page.route('**/api/availability', unavailable)
 await page.goto(base)
 await page.getByRole('heading', { name: /free AI capacity is used up/ }).waitFor()
 await shot(page, 'mobile-unavailable.png')

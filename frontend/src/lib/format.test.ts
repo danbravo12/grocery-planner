@@ -15,3 +15,13 @@ describe('format', () => {
     expect(localTime('2026-10-16T07:00:00+00:00', 'America/Los_Angeles')).toMatch(/^Fri 16 Oct, 12:00 am /)
   })
 })
+
+describe('localTime for the Sydney reset', () => {
+  // The quota resets at midnight Pacific: 07:00 UTC in PDT (Mar-Nov) and 08:00 UTC in PST.
+  it('is 6:00 pm AEDT in daylight saving', () => {
+    expect(localTime('2026-10-16T07:00:00Z', 'Australia/Sydney')).toBe('Fri 16 Oct, 6:00 pm AEDT')
+  })
+  it('is 5:00 pm AEST outside daylight saving', () => {
+    expect(localTime('2026-07-16T07:00:00Z', 'Australia/Sydney')).toBe('Thu 16 Jul, 5:00 pm AEST')
+  })
+})

@@ -147,6 +147,7 @@ class RuleVerdict(BaseModel):
     totals: dict[Store, str]
     gap: str
     threshold: str
+    split_total: str | None = None  # the best split's basket total; absent on older runs
     split_savings: str
     condition: Condition | None = None
 
