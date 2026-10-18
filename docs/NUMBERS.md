@@ -65,8 +65,8 @@ Counted on 2026-10-19.
 | Backend, a normal local run | 555 passed, 16 skipped (the live ones) | `pytest -q` with the database reachable |
 | Frontend unit tests | **60** (Vitest, 8 files) | `npx vitest run` |
 | Frontend end to end | 2 (Playwright, every `/api` call mocked) | `grep -c '^test(' frontend/e2e/smoke.spec.ts` |
-| CI | lint and unit tests, integration tests (a Postgres service container), frontend (typecheck, lint, tests, types-are-current check, build, Playwright): all green on commit `da71a08` | GitHub Actions, 2026-10-19 |
-| Size | 8,079 lines of backend code, 8,406 lines of backend tests, 1,766 of eval code, 4,065 of frontend; 35 commits | `wc -l` and `git rev-list --count HEAD` on `da71a08` |
+| CI | lint and unit tests, integration tests (a Postgres service container), frontend (typecheck, lint, tests, types-are-current check, build, Playwright): all green on commit `7da888e` (`da71a08` before the history rewrite) | GitHub Actions, 2026-10-19 |
+| Size | 8,079 lines of backend code, 8,406 lines of backend tests, 1,766 of eval code, 4,065 of frontend; 35 commits | `wc -l` and `git rev-list --count HEAD` on `7da888e` (`da71a08` before the history rewrite) |
 
 ## 4. The deployed service
 
@@ -86,7 +86,7 @@ Measured on 2026-10-18 against `https://grocery-planner-99862655427.australia-so
 
 | Figure | Value | How |
 | --- | --- | --- |
-| Free-tier requests a day assumed | 500 | design doc, Guardrails; the public docs did not list a per-model figure, so it stays an assumption (DECISIONS.md, step 4) |
+| Free-tier requests a day | 500, as shown in AI Studio for this project's models (checked by Daniel on 2026-10-14); Google can change it | Daniel's check of AI Studio; design doc, Guardrails |
 | Daily limit and admission limit | 350 (70%) and **298** (350 less a 15% buffer) requests per Pacific day | `backend/grocery_planner/config.py`, pinned by a test |
 | Median requests per run | 3 (section 1) | |
 | **Runs a day at the median** | **298 / 3 = 99** (101 at the mean of 2.95) | arithmetic on the two lines above |

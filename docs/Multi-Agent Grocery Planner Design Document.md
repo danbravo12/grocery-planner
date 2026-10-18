@@ -389,7 +389,7 @@ Every parameter has a default and a clamped range, and the values used are store
 
 ## Open items (all closed)
 
-- [x] Read the Gemini 3.1 Flash-Lite limits from the AI Studio rate-limit page, then set the daily budget and buffer. Closed with an assumption: the public docs did not list a per-model figure, so the free tier is taken as 500 requests a day; 70% is 350 and a 15% buffer gives an admission limit of 298 (DECISIONS.md, steps 4 and 9). It stays an assumption.
+- [x] Read the Gemini 3.1 Flash-Lite limits from the AI Studio rate-limit page, then set the daily budget and buffer. Closed: 500 requests a day as shown in AI Studio for this project's models (checked by Daniel on 2026-10-14; Google can change it); 70% is 350 and a 15% buffer gives an admission limit of 298 (DECISIONS.md, steps 4, 9 and 16b).
 - [x] Check Google's deprecations page for 2.5 Flash-Lite before building (done: 2.5 is limited to existing users, so the build started on 3.5; the default became 3.1 after a 3.5 outage and the eval comparison)
 - [x] Hosting that allows long-lived streaming responses: Google Cloud Run, with a one-hour request timeout
 - [x] Whether the first seeded catalogue covers Aldi or only Coles and Woolworths: only Coles and Woolworths (Aldi is a store-list entry with no seeded rows)

@@ -4,7 +4,7 @@ Describe the meals you plan to cook; three agents build the shopping list, price
 
 **Live demo: https://grocery-planner-99862655427.australia-southeast1.run.app** · [Sample run](https://grocery-planner-99862655427.australia-southeast1.run.app/runs/f95caaf0-a6fc-4587-9395-7422e48bf67d)
 
-It is a free-tier demo with seeded, fictional prices. On the form, **Try an example** has four presets that fill it in: a close call, one store clearly cheaper, a split, and a verdict that depends on a special ending. A run takes about 10 to 45 seconds. The first visit after a quiet spell takes a few seconds longer because the service scales to zero.
+It is a free-tier demo with seeded, fictional prices. On the form, **Try an example** has four presets that fill it in: a close call, one store clearly cheaper, a split, and a verdict that depends on a special ending. Usually about 10 seconds; slower when the free model is busy (p90 31 s). The first visit after a quiet spell takes a few seconds longer because the service scales to zero.
 
 ![The result for a split-the-shop plan](docs/screenshots/hero-split.png)
 
@@ -52,10 +52,10 @@ The agents do the parts that need judgment: what a dish probably contains, which
 
 ## Design decisions and trade-offs
 
-- **Batching, over one call per item.** The ingredient agent expands all dishes in one call and the price agent prices all items in one call, because the binding limit is the free tier's requests per day (500 assumed), not tokens. A run costs 2 to 4 requests, so the daily budget covers about 99 runs at the median.
+- **Batching, over one call per item.** The ingredient agent expands all dishes in one call and the price agent prices all items in one call, because the binding limit is the free tier's requests per day (500 a day, as shown in AI Studio for this project's models and checked on 2026-10-14; Google can change it), not tokens. A run costs 2 to 4 requests, so the daily budget covers about 99 runs at the median.
 - **A rule verdict computed by code, over letting the model decide.** Savings maths is exact and checkable, and the model is good at the part left to it, explanation. The planner may override only for `match_quality`.
 - **A conditional verdict for weekly specials, over an override.** Specials run Wednesday to Tuesday, so a verdict can hold only until a date. Code computes the verdict twice (current prices, and with specials put back to regular price); if they differ the answer carries "if you shop by Tue 20 Oct ... after that ...". It is true on both sides of the date.
-- **A thin model layer I wrote, over calling the SDK directly from the agents.** The budget needs a hook before and after every send, retries differ by failure type (timeouts once, 5xx and per-minute 429s three times, per-day 429s never), schema repair is one extra request, and a tool conversation has to restart on a different model.
+- **A thin in-house layer over `google-genai`, over an agent framework (PydanticAI, LangChain)**, so every request is visible and counted against the daily budget, and retries, schema repair and the tool loop are code I can explain.
 - **A fallback model with its own budget, over a single model.** Both Gemini models had outages during the build. A call that fails on the primary runs once more on the fallback; quota is per model, so the fallback keeps its own counter.
 - **An atomic worst-case reservation, over counting afterwards.** A run reserves its 9-request worst case in one conditional SQL update and releases the unused part, so ten simultaneous runs cannot overshoot the day's budget (a test runs 20 threads against a 20-request limit: exactly 2 get in).
 - **Deterministic evals with no LLM judge, over a judge model.** Every check is exact (required items, quantity ranges, allowed product ids, no invented dollar amounts), so a failure means something specific and the scores are not noisy. A judge is a later addition if a fuzzy question starts to matter.
@@ -126,7 +126,7 @@ Each of these is a decision in [docs/DECISIONS.md](docs/DECISIONS.md), with the 
 - **Visitor and IP limits are bypassable** (clear the cookie, change IP). There are no accounts. At scale: authenticated users and per-account quotas.
 - **A small eval set.** 39 cases, deterministic checks only, 1 repeat in CI (3 for the baseline). The quality of the planner's wording is not scored. At scale: larger sets, production sampling and a judge for the fuzzy questions.
 - **Cold start of about 6.6 s** after idle (one sample); `--min-instances 1` removes it for roughly $50 a month.
-- **Free-tier models.** The quota can run out for the day and the 500-requests-a-day figure is an assumption I could not confirm in Google's public docs. Latency swings with Gemini's load (the same request took 11 s one day and 45 s another).
+- **Free-tier models.** The quota can run out for the day: it is 500 requests a day, as shown in AI Studio for this project's models (checked on 2026-10-14), and Google can change it. Latency swings with Gemini's load (the same request took 11 s one day and 45 s another).
 - **The prompt-injection guard is bounded**, as described above, and run links are public to anyone who has them.
 - **The measured numbers come from 20 test runs**, not from user traffic.
 
