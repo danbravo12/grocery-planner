@@ -15,6 +15,11 @@ SCHEDULER = "scheduler@proj.iam.gserviceaccount.com"
 AS_OF = date(2026, 10, 18)
 
 
+@pytest.fixture(autouse=True)
+def _today(monkeypatch):
+    monkeypatch.setattr("grocery_planner.api.app.today_sydney", lambda: AS_OF)  # not the real date
+
+
 def settings(**kw):
     base = dict(daily_audience=AUDIENCE, daily_sa_email=SCHEDULER, **FAST)
     return ApiSettings(**{**base, **kw})
