@@ -56,7 +56,16 @@ def _recommendation(run: RunRecord) -> dict[str, Any] | None:
         "rule_verdict": {
             **_pick(
                 verdict,
-                ("kind", "store", "totals", "gap", "threshold", "split_total", "split_savings", "condition"),
+                (
+                    "kind",
+                    "store",
+                    "totals",
+                    "gap",
+                    "threshold",
+                    "split_total",
+                    "split_savings",
+                    "condition",
+                ),
             ),
         },
     }
