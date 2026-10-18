@@ -23,3 +23,6 @@ backend/evals/results/*
 frontend/playwright-report/
 frontend/test-results/
 frontend/dist/
+
+# work in progress, not part of the release
+v2_docs/
