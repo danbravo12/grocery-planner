@@ -21,6 +21,7 @@ from pydantic import BaseModel, ValidationError
 
 from grocery_planner.env import getenv
 from grocery_planner.llm.ratelimit import DEFAULT_RATE_LIMITER, RateLimiter
+from grocery_planner.llm.timeouts import current_timeout_ms
 from grocery_planner.llm.types import (
     BudgetExhausted,
     GenerationHandle,
@@ -315,7 +316,7 @@ class GeminiClient:
                 else None
             ),
             automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
-            http_options=types.HttpOptions(timeout=TIMEOUT_MS),
+            http_options=types.HttpOptions(timeout=current_timeout_ms(TIMEOUT_MS)),
         )
 
     def _emit(self, call: _Call, delta: Usage) -> None:

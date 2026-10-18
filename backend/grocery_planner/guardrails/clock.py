@@ -19,10 +19,10 @@ def next_reset(now: datetime) -> datetime:
 @dataclass(frozen=True)
 class Availability:
     available: bool
-    reason: str | None  # day_budget, google_quota
+    reason: str | None  # day_budget, google_quota, provider_billing
     message: str
-    reset_at_utc: datetime
-    reset_at_sydney: datetime
+    reset_at_utc: datetime | None  # None for provider_billing: nothing resets it
+    reset_at_sydney: datetime | None
     day: date
 
 
@@ -35,7 +35,13 @@ def availability_message(reset_at: datetime) -> str:
     )
 
 
+PROVIDER_BILLING = "provider_billing"
+BILLING_MESSAGE = "The planner is temporarily unavailable. Please try again later."
+
+
 def build_availability(now: datetime, reason: str | None) -> Availability:
+    if reason == PROVIDER_BILLING:  # a billing problem ends when someone fixes it, not at a time
+        return Availability(False, reason, BILLING_MESSAGE, None, None, pacific_day(now))
     reset = next_reset(now)
     return Availability(
         available=reason is None,

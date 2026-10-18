@@ -227,6 +227,17 @@ Or open Logs Explorer in the console. A billing problem with the Gemini key's pr
 
 **Is it scaled to zero?** Look for `Shutting down` in the logs (about 15 minutes after the last request) and `Starting new instance` at the next cold start.
 
+**Per-agent model timeouts.** Each model request has its own time limit: ingredient 12 s, price 25 s, planner 25 s (measured p95 per call was 3.5, 12.2 and 13.9 s; the reasoning is in DECISIONS.md, step 15b). To change one without a rebuild: `gcloud run services update grocery-planner --update-env-vars GEMINI_TIMEOUT_PLANNER_S=20 --region=$REGION --project=$PROJECT` (seconds, kept between 8 and 25).
+
+**Clearing a billing stop.** When Google refuses both models for billing (HTTP 402), the site shows "Temporarily unavailable" (no time) and stays that way until midnight Pacific. After you have fixed the credit (see the Gemini key project's billing in AI Studio), clear it right away, in Supabase's SQL editor:
+
+```sql
+update usage_counters set day_stopped = false, stop_reason = null, updated_at = now()
+where scope = 'global' and stop_reason = 'provider_billing';
+```
+
+and check `curl $URL/api/availability` says `"available": true`.
+
 ## Costs
 
 Estimates, checked against Google's pricing page on 2026-10-18. Sydney is a **Tier 2** region, whose price list the public page does not show; the Tier 1 (Iowa) instance-based prices are $0.000018 per vCPU-second and $0.000002 per GiB-second, so I assume Sydney is up to about 30% more.

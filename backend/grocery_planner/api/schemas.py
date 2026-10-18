@@ -31,8 +31,8 @@ class ValidationErrorBody(ErrorBody):
 
 class UnavailableBody(ErrorBody):
     reason: str | None = None
-    reset_at_utc: str
-    reset_at_sydney: str
+    reset_at_utc: str | None = None  # absent for provider_billing
+    reset_at_sydney: str | None = None
 
 
 class Health(BaseModel):
@@ -43,8 +43,8 @@ class Availability(BaseModel):
     available: bool
     reason: str | None
     message: str
-    reset_at_utc: str
-    reset_at_sydney: str
+    reset_at_utc: str | None  # null when reason is provider_billing
+    reset_at_sydney: str | None
     sample_run_id: str | None
 
 

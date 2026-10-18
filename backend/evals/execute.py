@@ -139,7 +139,7 @@ def _e2e(case: Case, make_llm: LLMFactory, meter: Meter) -> Subject:
     )
     run_id = runner.create_run(request, config, ANCHOR, bypass_cache=True)
     run = runner.run_plan(run_id)
-    if run.failure_reason in ("daily_quota", "budget_exhausted"):
+    if run.failure_reason in ("daily_quota", "budget_exhausted", "provider_billing"):
         raise EvalQuotaExhausted(run.user_message or "daily quota used up")
     if run.failure_reason in ("model_unavailable", "rate_limited", "busy"):
         raise LLMUnavailable(f"run failed with {run.failure_reason}")  # infrastructure

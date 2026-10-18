@@ -244,8 +244,8 @@ def create_app(settings: ApiSettings | None = None, services: Services | None = 
             "available": a.available,
             "reason": a.reason,
             "message": a.message,
-            "reset_at_utc": a.reset_at_utc.isoformat(),
-            "reset_at_sydney": a.reset_at_sydney.isoformat(),
+            "reset_at_utc": a.reset_at_utc.isoformat() if a.reset_at_utc else None,
+            "reset_at_sydney": a.reset_at_sydney.isoformat() if a.reset_at_sydney else None,
             "sample_run_id": settings.sample_run_id,
         }
 
@@ -264,11 +264,20 @@ def create_app(settings: ApiSettings | None = None, services: Services | None = 
         # 2. is the service open today?
         a = await run_in_threadpool(s.budget.availability)
         if not a.available:
-            wait = max(1, int((a.reset_at_utc - datetime.now(UTC)).total_seconds()))
+            wait = (
+                max(1, int((a.reset_at_utc - datetime.now(UTC)).total_seconds()))
+                if a.reset_at_utc
+                else 300  # a billing problem has no reset time: ask for a retry in a few minutes
+            )
+            extra = (
+                {"reset_at_utc": a.reset_at_utc.isoformat(),
+                 "reset_at_sydney": a.reset_at_sydney.isoformat()}
+                if a.reset_at_utc and a.reset_at_sydney
+                else {}
+            )  # fmt: skip
             raise ApiError(
                 503, "unavailable", a.message, headers={"Retry-After": str(wait)},
-                reason=a.reason, reset_at_utc=a.reset_at_utc.isoformat(),
-                reset_at_sydney=a.reset_at_sydney.isoformat(),
+                reason=a.reason, **extra,
             )  # fmt: skip
         if not s.queue.has_room():
             raise _busy()

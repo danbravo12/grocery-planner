@@ -34,7 +34,7 @@ export function FormPage() {
   const [errors, setErrors] = useState<Errors>({})
   const [banner, setBanner] = useState<string | null>(null)
   const [availability, setAvailability] = useState<Availability | null>(null)
-  const [unavailable, setUnavailable] = useState<{ reset: string } | null>(null)
+  const [unavailable, setUnavailable] = useState<{ reset: string | null; reason: string | null } | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const bannerRef = useRef<HTMLDivElement>(null)
 
@@ -61,10 +61,22 @@ export function FormPage() {
   const resetAt = availability?.reset_at_utc ?? null
 
   if (availability && !availability.available) {
-    return <UnavailableScreen resetUtc={availability.reset_at_utc} sampleRunId={availability.sample_run_id} />
+    return (
+      <UnavailableScreen
+        resetUtc={availability.reset_at_utc}
+        reason={availability.reason}
+        sampleRunId={availability.sample_run_id}
+      />
+    )
   }
   if (unavailable) {
-    return <UnavailableScreen resetUtc={unavailable.reset} sampleRunId={availability?.sample_run_id} />
+    return (
+      <UnavailableScreen
+        resetUtc={unavailable.reset}
+        reason={unavailable.reason}
+        sampleRunId={availability?.sample_run_id}
+      />
+    )
   }
 
   async function submit(event: React.FormEvent) {
@@ -85,8 +97,13 @@ export function FormPage() {
       if (e.status === 422) {
         setErrors(mapServerErrors(e.fields))
         setBanner('Please fix the highlighted fields.')
-      } else if (e.code === 'unavailable' && typeof e.extra['reset_at_utc'] === 'string') {
-        setUnavailable({ reset: e.extra['reset_at_utc'] })
+      } else if (e.code === 'unavailable') {
+        const reset = e.extra['reset_at_utc']
+        const reason = e.extra['reason']
+        setUnavailable({
+          reset: typeof reset === 'string' ? reset : null,
+          reason: typeof reason === 'string' ? reason : null,
+        })
       } else {
         setBanner(submitMessage(e, resetAt))
       }

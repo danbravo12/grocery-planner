@@ -604,4 +604,6 @@ def test_billing_on_both_models_flips_the_day_stop_and_shows_unavailable(env):
     with pytest.raises(QuotaExhausted):
         client.generate("s", "u", Out)
     a = env.budget.availability()
-    assert not a.available and a.reason == "google_quota"
+    assert not a.available and a.reason == "provider_billing"
+    assert a.reset_at_utc is None and a.reset_at_sydney is None
+    assert "temporarily unavailable" in a.message and "resets" not in a.message

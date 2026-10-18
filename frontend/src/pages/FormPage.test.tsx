@@ -226,6 +226,34 @@ describe('availability', () => {
     expect(screen.queryByRole('button', { name: 'Make my plan' })).not.toBeInTheDocument()
   })
 
+  it('says "Temporarily unavailable" with no time for a billing stop, and still links the sample run', async () => {
+    replies.availability = {
+      status: 200,
+      body: { ...OPEN, available: false, reason: 'provider_billing', message: 'temporarily unavailable', reset_at_utc: null, reset_at_sydney: null },
+    }
+    renderForm()
+    const notice = await screen.findByRole('status')
+    expect(within(notice).getByRole('heading', { name: 'Temporarily unavailable' })).toBeInTheDocument()
+    expect(within(notice).queryByText(/Come back at|resets/)).not.toBeInTheDocument()
+    expect(notice.textContent ?? '').not.toMatch(/\d{1,2}:\d{2}\s?(am|pm)/i)
+    expect(screen.queryByText("Today's free AI capacity is used up")).not.toBeInTheDocument()
+    expect(within(notice).getByRole('link', { name: /sample run/ })).toHaveAttribute('href', '/runs/sample-run')
+    expect(screen.queryByRole('button', { name: 'Make my plan' })).not.toBeInTheDocument()
+  })
+
+  it('swaps to the same screen when a billing stop arrives while you fill the form', async () => {
+    replies.create = {
+      status: 503,
+      body: { code: 'unavailable', message: 'temporarily unavailable', reason: 'provider_billing' },
+    }
+    const user = userEvent.setup()
+    renderForm()
+    await fillValid(user)
+    await user.click(screen.getByRole('button', { name: 'Make my plan' }))
+    expect(await screen.findByRole('heading', { name: 'Temporarily unavailable' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /sample run/ })).toBeInTheDocument()
+  })
+
   it('leaves out the sample link when there is none', async () => {
     replies.availability = { status: 200, body: { ...OPEN, available: false, sample_run_id: null } }
     renderForm()

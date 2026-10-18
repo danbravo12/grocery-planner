@@ -443,3 +443,24 @@ Full runbook, commands with their reasons, costs and the smoke test: [DEPLOY.md]
 - The budget alert (made by hand, unverified). The Langfuse `prod` tag check. Supabase password handling stays with Daniel.
 - Unverified until it was run (see DEPLOY.md and the report): the manual deploy workflow.
 - Not built: a staging environment, a custom domain, `min-instances 1`.
+
+## Step 15b (per-agent timeouts, billing message)
+### Per-agent request timeouts, from data
+- **Query** (Supabase `run_steps` joined to `runs`): completed runs of the last 7 days, completed steps with `requests > 0` (this leaves out cached ingredient steps), latency per call approximated as `latency_ms / requests`. The reprice and `planner_2` steps are rows of the price and planner agents and are counted with them (the step names in this window were only `ingredient`, `price` and `planner`).
+
+| Agent | Steps | Requests | p50 per call | p95 per call | max per call | step max |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| ingredient | 8 | 8 | 2.5 s | 3.5 s | 3.6 s | 3.6 s |
+| price | 18 | 20 | 4.3 s | 12.2 s | 18.6 s | 37.2 s |
+| planner | 18 | 25 | 2.9 s | 13.9 s | 15.2 s | 40.8 s |
+
+  No step fell back. The samples are small (8 to 18 steps), the window mixes laptop and Cloud Run runs, and Gemini's speed varies a lot from day to day (the same small example took 11 s on one day and 45 s on another), so treat these as a first estimate and re-run the query after a few weeks of real traffic.
+- **Chosen values** (rule: 2 to 3 x p95, floor 8 s, cap 25 s): **ingredient 12 s** (3 x 3.5 = 10.5, rounded up because the call is batched for up to 20 dishes and the sample had only small batches), **price 25 s** (2 x 12.2 = 24.4), **planner 25 s** (2 x 13.9 = 27.8, capped). Before this every call had one 20 s timeout. So ingredient is tighter and price and planner are slightly looser, because their measured p95 was already close to 20 s and a 20 s limit would have cut off roughly the slowest 1 in 10 calls.
+- **The suggested example of about 10 s for the planner does not fit the data**: its p95 is 13.9 s, so a 10 s limit would time out more than 5% of normal calls (each then retried and possibly sent to the fallback model). I followed the stated rule, which gives the 25 s cap.
+- **How:** `llm/timeouts.py`. An agent wraps its model call in `with agent_timeout("planner"):` (a context variable), and `GeminiClient._config` reads it, falling back to its 20 s default outside any agent (the probe, ad hoc calls). I used a context variable so that the `LLMClient` interface and every test fake stayed as they were. Overrides: `GEMINI_TIMEOUT_<AGENT>_S`, clamped to 8 to 25 s with a warning (a typo must not make every call time out). Retry and fallback rules are unchanged: a timeout is retried once, then the fallback runs (a test checks it, with the agent's value on both models).
+- **One consequence to know:** the worst case for one step is now larger: price with a timeout, a retry and then the fallback with its own timeout and retry is up to 4 x 25 s = 100 s, inside the 180 s run deadline but not by much. Real timeouts are rare in the data (none).
+### Billing stop message
+- A billing error (HTTP 402) that stops the day now sets the stop reason **`provider_billing`** (new `STOP_PROVIDER_BILLING`, in both budget implementations) instead of `google_quota`. `availability` returns `reason: "provider_billing"`, the message "The planner is temporarily unavailable. Please try again later." and **null reset times** (`reset_at_utc` and `reset_at_sydney` are now nullable in the API and in the generated types). `POST /api/runs` answers 503 `unavailable` with the same reason, no reset fields, and `Retry-After: 300`. A run that hits the billing error mid-run fails with `failure_reason: "provider_billing"` and the same message (it used to say "daily reset"); the eval harness treats that reason as a quota stop too. A model row stopped for billing also refuses new requests (`BudgetExhausted`) so nothing keeps calling a refused project.
+- **Frontend:** the unavailable screen says "Temporarily unavailable", "The planner cannot make new plans right now. Please try again later.", one line that it is a free-tier demo, **no time**, and still links the sample run. It shows whether the stop was there on load or arrived on submit. Everything else is unchanged.
+- **Clearing it:** a billing stop lasts until the Pacific day rolls over unless it is cleared by hand after the credit is fixed; the SQL is in DEPLOY.md. I did not add automatic expiry.
+- Tests: 5 backend (availability and the 503 body, the guard in memory and Postgres, the runner message, the harness) and 2 frontend (on load, and arriving on submit), plus 7 for the timeouts.

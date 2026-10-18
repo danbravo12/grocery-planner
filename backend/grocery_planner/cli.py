@@ -97,9 +97,14 @@ def render_budget(budget) -> str:
             f"admission limit {u.admission_limit}  daily limit {u.daily_limit}{stop}"
         )
     a = budget.availability()
+    resets = (
+        f"   resets {a.reset_at_utc:%Y-%m-%d %H:%M} UTC / {a.reset_at_sydney:%Y-%m-%d %H:%M} Sydney"
+        if a.reset_at_utc and a.reset_at_sydney
+        else "   no reset time (fix the billing problem)"
+    )
     lines.append(
         f"  availability: {'available' if a.available else 'UNAVAILABLE (' + str(a.reason) + ')'}"
-        f"   resets {a.reset_at_utc:%Y-%m-%d %H:%M} UTC / {a.reset_at_sydney:%Y-%m-%d %H:%M} Sydney"
+        + resets
     )
     return "\n".join(lines)
 

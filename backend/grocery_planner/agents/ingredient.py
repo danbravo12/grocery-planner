@@ -24,6 +24,7 @@ from grocery_planner.domain.ingredients import (
     IngredientList,
 )
 from grocery_planner.domain.request import PlanRequest
+from grocery_planner.llm.timeouts import agent_timeout
 from grocery_planner.llm.types import LLMClient, Usage
 from grocery_planner.tools.avoid_rules import avoid_violations
 from grocery_planner.tools.vocabulary import VocabEntry, ingredient_vocabulary
@@ -279,9 +280,13 @@ def run_ingredient_agent(
             {d.dish_id: d.dish_name for d in misses},
             {d.dish_id: d.avoid for d in misses},
         )
-        result = llm.generate(
-            SYSTEM_PROMPT, json.dumps(payload, separators=(",", ":")), output_type, temperature=0.1
-        )
+        with agent_timeout("ingredient"):
+            result = llm.generate(
+                SYSTEM_PROMPT,
+                json.dumps(payload, separators=(",", ":")),
+                output_type,
+                temperature=0.1,
+            )
         usage = result.usage
         model, fell_back = result.model, result.fell_back
         by_id = {d.dish_id: d for d in result.parsed.dishes}

@@ -24,6 +24,7 @@ from grocery_planner.domain import (
     Store,
 )
 from grocery_planner.domain.ingredients import IngredientItem
+from grocery_planner.llm.timeouts import agent_timeout
 from grocery_planner.llm.types import LLMClient, Usage
 from grocery_planner.tools.price_lookup import (
     PriceSource,
@@ -338,9 +339,10 @@ def _ask(
             for st in states
         ]
     }
-    result = llm.generate(
-        SYSTEM_PROMPT, json.dumps(payload, separators=(",", ":")), MatchBatch, temperature=0.1
-    )
+    with agent_timeout("price"):
+        result = llm.generate(
+            SYSTEM_PROMPT, json.dumps(payload, separators=(",", ":")), MatchBatch, temperature=0.1
+        )
     acc.usage += result.usage
     acc.model = result.model
     acc.fell_back = acc.fell_back or result.fell_back

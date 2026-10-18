@@ -27,7 +27,12 @@ from grocery_planner.orchestrator.budget import BudgetUnavailable
 log = logging.getLogger(__name__)
 MIN_RUN_REQUESTS = 3  # fewest requests a run can need: ingredient, price, planner
 STOP_DAY_BUDGET = "day_budget"  # our counter says no new runs fit
-STOP_GOOGLE_QUOTA = "google_quota"  # Google returned a per-day 429 or a billing 402
+STOP_GOOGLE_QUOTA = "google_quota"  # Google returned a per-day 429 for this model
+STOP_PROVIDER_BILLING = "provider_billing"  # Google refused with a billing error (HTTP 402)
+
+
+def _stop_reason_for(kind: str) -> str:
+    return STOP_PROVIDER_BILLING if kind == "billing" else STOP_GOOGLE_QUOTA
 
 
 @dataclass(frozen=True)
@@ -104,6 +109,8 @@ class _Common:
         row = self._usage(model, self._today())
         if row.stop_reason == STOP_GOOGLE_QUOTA and row.day_stopped:
             raise BudgetExhausted(model, f"Google reports the daily quota for {model} is used up")
+        if row.stop_reason == STOP_PROVIDER_BILLING and row.day_stopped:
+            raise BudgetExhausted(model, f"Google refused {model} for a billing problem")
         if row.used >= self.cfg.daily_limit:
             raise BudgetExhausted(model)
 
@@ -191,7 +198,7 @@ class InMemoryDayBudget(_Common):
         if kind in ("per_day", "billing"):
             with self._lock:
                 row = self._row(self._today(), model)
-                row["stopped"], row["reason"] = True, STOP_GOOGLE_QUOTA
+                row["stopped"], row["reason"] = True, _stop_reason_for(kind)
 
     def prune(self, keep_days: int = 7, now: datetime | None = None) -> int:
         cutoff = self._today(now) - timedelta(days=keep_days)
@@ -365,7 +372,7 @@ class PostgresDayBudget(_Common):
         day = self._today()
         with self._pool.connection() as conn:
             conn.execute(_ENSURE_ROW, (day, model))
-            conn.execute(_STOP_ROW, (STOP_GOOGLE_QUOTA, day, model))
+            conn.execute(_STOP_ROW, (_stop_reason_for(kind), day, model))
 
     def prune(self, keep_days: int = 7, now: datetime | None = None) -> int:
         cutoff = self._today(now) - timedelta(days=keep_days)

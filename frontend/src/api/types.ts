@@ -119,9 +119,9 @@ export interface components {
             /** Reason */
             reason: string | null;
             /** Reset At Sydney */
-            reset_at_sydney: string;
+            reset_at_sydney: string | null;
             /** Reset At Utc */
-            reset_at_utc: string;
+            reset_at_utc: string | null;
             /** Sample Run Id */
             sample_run_id: string | null;
         };

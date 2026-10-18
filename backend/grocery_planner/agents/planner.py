@@ -17,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from grocery_planner.config import ACTIVE_STORES
 from grocery_planner.domain import PlannerConfig, PricedItem, Store
+from grocery_planner.llm.timeouts import agent_timeout
 from grocery_planner.llm.types import LLMClient, ToolCallRecord, ToolSpec, Usage
 from grocery_planner.tools.planner_math import (
     Coverage,
@@ -860,16 +861,17 @@ def run_planner(
     facts = build_facts(items, stores, config, as_of)
     tool_amounts: set[Decimal] = set()
     user = json.dumps(model_input(facts), separators=(",", ":"))
-    if facts.split.savings >= facts.verdict.threshold:
-        result = llm.generate_with_tools(
-            SYSTEM_PROMPT,
-            user,
-            output_model(facts, tool_amounts),
-            [_what_if_tool(facts, tool_amounts)],
-            max_tool_rounds=MAX_TOOL_ROUNDS,
-        )
-    else:  # best_split cannot reach the threshold, so no split can: the tool could not help
-        result = llm.generate(NO_TOOL_PROMPT, user, output_model(facts, tool_amounts))
+    with agent_timeout("planner"):
+        if facts.split.savings >= facts.verdict.threshold:
+            result = llm.generate_with_tools(
+                SYSTEM_PROMPT,
+                user,
+                output_model(facts, tool_amounts),
+                [_what_if_tool(facts, tool_amounts)],
+                max_tool_rounds=MAX_TOOL_ROUNDS,
+            )
+        else:  # best_split cannot reach the threshold, so no split can: the tool could not help
+            result = llm.generate(NO_TOOL_PROMPT, user, output_model(facts, tool_amounts))
     out = result.parsed
     v = facts.verdict
 

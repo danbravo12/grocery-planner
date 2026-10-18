@@ -429,6 +429,25 @@ def test_unavailable_when_the_day_is_stopped():
                           "sample_run_id"}  # fmt: skip
 
 
+def test_a_billing_stop_says_provider_billing_with_no_reset_time_and_keeps_the_sample_link():
+    app, _, _, budget = build(settings=ApiSettings(sample_run_id="abc", **FAST))
+    budget.quota_exhausted("fake-model", "billing")
+    with TestClient(app) as client:
+        a = client.get("/api/availability").json()
+        assert a["available"] is False and a["reason"] == "provider_billing"
+        assert a["reset_at_utc"] is None and a["reset_at_sydney"] is None
+        assert a["sample_run_id"] == "abc"
+        assert "temporarily unavailable" in a["message"].lower()
+        assert "resets" not in a["message"] and "UTC" not in a["message"]
+        r = post(client)
+        body = r.json()
+        assert r.status_code == 503 and body["code"] == "unavailable"
+        assert body["reason"] == "provider_billing"
+        assert "reset_at_utc" not in body and "reset_at_sydney" not in body
+        assert int(r.headers["retry-after"]) == 300
+        assert budget.counters == {}  # nothing was admitted
+
+
 def test_availability_when_open_includes_the_sample_run():
     app, _, _, _ = build(settings=ApiSettings(sample_run_id="abc", **FAST))
     with TestClient(app) as client:
