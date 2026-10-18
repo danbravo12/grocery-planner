@@ -20,7 +20,7 @@ log = logging.getLogger(__name__)
 FLOOR_MS = 8_000
 CAP_MS = 25_000
 DEFAULT_TIMEOUT_MS = 20_000  # outside any agent
-AGENT_TIMEOUT_MS: dict[str, int] = {"ingredient": 12_000, "price": 25_000, "planner": 25_000}
+AGENT_TIMEOUT_MS: dict[str, int] = {"ingredient": 12_000, "price": 25_000, "planner": 12_000}
 
 _current: ContextVar[int | None] = ContextVar("llm_request_timeout_ms", default=None)
 

@@ -227,7 +227,7 @@ Or open Logs Explorer in the console. A billing problem with the Gemini key's pr
 
 **Is it scaled to zero?** Look for `Shutting down` in the logs (about 15 minutes after the last request) and `Starting new instance` at the next cold start.
 
-**Per-agent model timeouts.** Each model request has its own time limit: ingredient 12 s, price 25 s, planner 25 s (measured p95 per call was 3.5, 12.2 and 13.9 s; the reasoning is in DECISIONS.md, step 15b). To change one without a rebuild: `gcloud run services update grocery-planner --update-env-vars GEMINI_TIMEOUT_PLANNER_S=20 --region=$REGION --project=$PROJECT` (seconds, kept between 8 and 25).
+**Per-agent model timeouts.** Each model request has its own time limit: ingredient 12 s, price 25 s, planner 12 s (a first estimate from `run_steps`, with the planner set by hand because that data included hung and retried calls; to be revisited from Langfuse after a week of traffic; see DECISIONS.md, step 15b). To change one without a rebuild: `gcloud run services update grocery-planner --update-env-vars GEMINI_TIMEOUT_PLANNER_S=20 --region=$REGION --project=$PROJECT` (seconds, kept between 8 and 25).
 
 **Clearing a billing stop.** When Google refuses both models for billing (HTTP 402), the site shows "Temporarily unavailable" (no time) and stays that way until midnight Pacific. After you have fixed the credit (see the Gemini key project's billing in AI Studio), clear it right away, in Supabase's SQL editor:
 

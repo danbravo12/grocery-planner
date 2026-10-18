@@ -17,9 +17,9 @@ from tests.test_orchestrator import run as run_plan
 
 
 def test_the_chosen_values_follow_the_measured_p95_rule():
-    # step 15b: one call's p95 was ingredient 3.5 s, planner 13.9 s, price 12.2 s; the rule is
-    # 2 to 3 x p95 with a floor of 8 s and a cap of 25 s (ingredient is batched, so given 12 s)
-    assert AGENT_TIMEOUT_MS == {"ingredient": 12_000, "price": 25_000, "planner": 25_000}
+    # step 15b: ingredient 12 s, price 25 s; the planner's measured p95 (13.9 s) was inflated by
+    # calls that hung until the old 20 s timeout and were retried, so it is set to 12 s by hand
+    assert AGENT_TIMEOUT_MS == {"ingredient": 12_000, "price": 25_000, "planner": 12_000}
     assert all(FLOOR_MS <= v <= CAP_MS for v in AGENT_TIMEOUT_MS.values())
     assert (FLOOR_MS, CAP_MS) == (8_000, 25_000)
 
@@ -34,7 +34,7 @@ def test_the_context_sets_and_restores_the_value_even_when_nested_or_failing():
     with agent_timeout("ingredient"):
         assert current_timeout_ms() == 12_000
         with agent_timeout("planner"):
-            assert current_timeout_ms() == 25_000
+            assert current_timeout_ms() == 12_000
         assert current_timeout_ms() == 12_000
     assert current_timeout_ms(1) == 1
     with pytest.raises(RuntimeError), agent_timeout("price"):
@@ -51,16 +51,16 @@ def test_environment_override_is_in_seconds_and_clamped_to_the_floor_and_cap(mon
     assert timeout_ms_for("planner") == CAP_MS
     assert "clamped" in caplog.text
     monkeypatch.setenv("GEMINI_TIMEOUT_PLANNER_S", "soon")
-    assert timeout_ms_for("planner") == 25_000  # not a number: the default stays
+    assert timeout_ms_for("planner") == 12_000  # not a number: the default stays
     monkeypatch.setenv("GEMINI_TIMEOUT_PLANNER_S", "")
-    assert timeout_ms_for("planner") == 25_000
+    assert timeout_ms_for("planner") == 12_000
     assert timeout_ms_for("ingredient") == 12_000  # other agents are untouched
 
 
 def test_the_gemini_client_sends_the_agent_timeout_and_keeps_20_s_elsewhere():
     h = run([text(GOOD)] * 4)
     h.client.generate("s", "u", Out)
-    for agent, expected in (("ingredient", 12_000), ("price", 25_000), ("planner", 25_000)):
+    for agent, expected in (("ingredient", 12_000), ("price", 25_000), ("planner", 12_000)):
         with agent_timeout(agent):
             h.client.generate("s", "u", Out)
         assert h.sent[-1]["config"].http_options.timeout == expected
@@ -94,5 +94,5 @@ def test_each_agent_sets_its_own_timeout_during_a_real_run(monkeypatch):
     runner, _ = make_runner(happy_script)
     _, row = run_plan(runner)
     assert row.status == "completed"
-    assert seen == [12_000, 25_000, 25_000]  # ingredient, price, planner
+    assert seen == [12_000, 25_000, 12_000]  # ingredient, price, planner
     assert current_timeout_ms(-1) == -1  # and nothing leaks out of the run
