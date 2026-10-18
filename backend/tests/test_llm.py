@@ -623,3 +623,57 @@ def test_zero_allowed_rounds_means_the_first_request_must_answer():
         h.sent[0]["config"].tool_config.function_calling_config.mode
         == types.FunctionCallingConfigMode.NONE
     )
+
+
+# ---- billing (HTTP 402) ----------------------------------------------------------------------
+
+CREDITS = "Your prepayment credits are depleted. Please go to AI Studio to manage billing."
+
+
+def billing():
+    return api_error(errors.ClientError, 402, "RESOURCE_EXHAUSTED", message=CREDITS)
+
+
+def test_402_is_a_billing_stop_that_is_never_retried_and_warns_the_operator(caplog):
+    h = run([billing(), text(GOOD)])
+    with caplog.at_level("WARNING"):
+        with pytest.raises(QuotaExhausted) as e:
+            h.client.generate("s", "u", Out)
+    assert e.value.kind == "billing"
+    assert len(h.sent) == 1 and h.sleeps == []
+    assert "Gemini key's project has billing problems" in caplog.text
+
+
+def test_the_depleted_credits_text_counts_whatever_the_code():
+    err = api_error(errors.ClientError, 403, "PERMISSION_DENIED", message=CREDITS)
+    with pytest.raises(QuotaExhausted) as e:
+        run([err]).client.generate("s", "u", Out)
+    assert e.value.kind == "billing"
+
+
+def test_a_billing_error_falls_back_once_and_does_not_stop_the_day_if_that_works():
+    stops: list[tuple[str, str]] = []
+    h = with_fallback([billing(), text(GOOD)], on_quota_exhausted=lambda m, k: stops.append((m, k)))
+    r = h.client.generate("s", "u", Out)
+    assert r.fell_back and r.fallback_reason == "billing" and r.model == "backup-model"
+    assert models_sent(h) == ["test-model", "backup-model"] and h.sleeps == []
+    assert stops == []
+
+
+def test_billing_on_both_models_stops_the_day_without_retrying():
+    stops: list[tuple[str, str]] = []
+    h = with_fallback(
+        [billing(), billing(), text(GOOD)], on_quota_exhausted=lambda m, k: stops.append((m, k))
+    )
+    with pytest.raises(QuotaExhausted) as e:
+        h.client.generate("s", "u", Out)
+    assert e.value.kind == "billing" and models_sent(h) == ["test-model", "backup-model"]
+    assert sorted(stops) == [("backup-model", "billing"), ("test-model", "billing")]
+
+
+def test_billing_without_a_fallback_stops_the_day_at_once():
+    stops: list[tuple[str, str]] = []
+    h = run([billing()], on_quota_exhausted=lambda m, k: stops.append((m, k)))
+    with pytest.raises(QuotaExhausted):
+        h.client.generate("s", "u", Out)
+    assert stops == [("test-model", "billing")]

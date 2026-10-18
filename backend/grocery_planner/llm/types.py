@@ -21,7 +21,7 @@ class LLMUnavailable(LLMError):
 
 class QuotaExhausted(LLMError):
     def __init__(
-        self, kind: Literal["per_minute", "per_day", "unknown"], message: str = ""
+        self, kind: Literal["per_minute", "per_day", "billing", "unknown"], message: str = ""
     ) -> None:
         super().__init__(f"quota exhausted ({kind}){': ' + message if message else ''}")
         self.kind = kind
@@ -112,7 +112,9 @@ class ModelHooks:
     on_request: OnRequest | None = None  # after every request actually sent
     before_request: Callable[[str], None] | None = None  # (model) before a send; may raise
     fallback_allowed: Callable[[], bool] | None = None  # False: act as if no fallback is set
-    on_quota_exhausted: Callable[[str, str], None] | None = None  # (model, kind) from Google
+    on_quota_exhausted: Callable[[str, str], None] | None = (
+        None  # (model, kind: per_day or billing) from Google
+    )
     start_generation: Callable[[GenerationStart], GenerationHandle] | None = None  # tracing
     on_tool_call: Callable[["ToolCallRecord"], None] | None = None  # tracing
 

@@ -527,6 +527,13 @@ def test_quota_exhausted_from_a_fake_client():
     assert run(runner)[1].failure_reason == "daily_quota"
 
 
+def test_a_billing_stop_fails_the_run_with_the_daily_capacity_message():
+    runner, _ = make_runner(failing_script(1, QuotaExhausted("billing")))
+    row = run(runner)[1]
+    assert row.failure_reason == "daily_quota" and "AI quota" in row.user_message
+    assert "billing" not in row.user_message.lower()
+
+
 class Clock:
     def __init__(self):
         self.t = 0.0

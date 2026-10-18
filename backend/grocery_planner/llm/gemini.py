@@ -68,6 +68,11 @@ RETRY_DELAY_CAP = 20.0  # longest retryDelay hint we will wait out
 TIMEOUT_MS = 20_000
 
 
+def is_billing_error(err: errors.APIError) -> bool:
+    """Google refusing every call because the key's project has no credit (HTTP 402)."""
+    return err.code == 402 or "prepayment credits are depleted" in str(err.message).lower()
+
+
 def classify_429(err: errors.APIError) -> str:
     """per_day, per_minute or unknown, from the error's quota violation ids, then its text."""
     text = json.dumps(err.details, default=str).lower() + " " + str(err.message).lower()
@@ -220,24 +225,40 @@ class GeminiClient:
         """Run on the primary model. If it is unavailable (retries exhausted) or out of daily
         quota, run the whole call once more on the fallback model, from the start: a tool
         conversation cannot move between models (thought signatures are model-specific).
-        Quotas are per model, so a per-day 429 on the primary says nothing about the fallback."""
+        Quotas are per model, so a per-day 429 on the primary says nothing about the fallback.
+        A billing error (402) also falls back once, though the fallback may share the project."""
         start, call = self._clock(), _Call(model=self.model)
         try:
             return attempt(call, start)
         except (LLMUnavailable, QuotaExhausted) as e:
-            self._report_quota(call.model, e)
-            if (
-                self.fallback_model is None
-                or (isinstance(e, QuotaExhausted) and e.kind != "per_day")
-                or (self._fallback_allowed is not None and not self._fallback_allowed())
-            ):
+            billing = isinstance(e, QuotaExhausted) and e.kind == "billing"
+            can_fall_back = (
+                self.fallback_model is not None
+                and (
+                    isinstance(e, LLMUnavailable)
+                    or (isinstance(e, QuotaExhausted) and e.kind in ("per_day", "billing"))
+                )
+                and (self._fallback_allowed is None or self._fallback_allowed())
+            )
+            # A billing error stops the day only when the fallback fails too (it may live in
+            # another project); a per-day quota is per model, so it is reported at once.
+            if not (billing and can_fall_back):
+                self._report_quota(call.model, e)
+            if not can_fall_back:
                 raise
-            reason = "unavailable" if isinstance(e, LLMUnavailable) else "per_day quota"
+            primary = call.model
+            reason = (
+                "unavailable"
+                if isinstance(e, LLMUnavailable)
+                else ("billing" if billing else "per_day quota")
+            )
             call.model, call.fell_back, call.fallback_reason = self.fallback_model, True, reason
             call.tool_calls, call.repair_used = [], False  # the answering run starts clean
             try:
                 return attempt(call, start)
             except QuotaExhausted as e2:
+                if billing:
+                    self._report_quota(primary, e)
                 self._report_quota(call.model, e2)
                 raise
 
@@ -254,9 +275,9 @@ class GeminiClient:
             self._on_quota_exhausted
             and isinstance(exc, QuotaExhausted)
             and not isinstance(exc, BudgetExhausted)
-            and exc.kind == "per_day"
+            and exc.kind in ("per_day", "billing")
         ):
-            self._on_quota_exhausted(model, "per_day")
+            self._on_quota_exhausted(model, exc.kind)
 
     # ---- internals ----------------------------------------------------------------------
 
@@ -326,6 +347,14 @@ class GeminiClient:
             except errors.ClientError as e:
                 self._emit(call, Usage(requests=1))
                 _end_generation(handle, error=_error_label(e))
+                if is_billing_error(e):
+                    log.warning(
+                        "Gemini key's project has billing problems (HTTP %s: credits depleted "
+                        "or billing disabled); add credits in AI Studio. Model %s.",
+                        e.code,
+                        call.model,
+                    )
+                    raise QuotaExhausted("billing", str(e.message)) from e  # never retried
                 if e.code != 429:
                     raise LLMError(f"{e.code} {e.status}: {e.message}") from e
                 kind = classify_429(e)

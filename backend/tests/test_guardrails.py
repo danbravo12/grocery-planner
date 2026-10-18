@@ -588,3 +588,20 @@ def test_the_cli_prints_the_counters_after_a_run(capsys, tmp_path):
     assert "BUDGET (requests, Pacific day)" in out
     assert "fake-model" in out and "used   3  reserved  0" in out and "admission limit 20" in out
     assert "backup" in out and "availability: available" in out
+
+
+def test_billing_on_both_models_flips_the_day_stop_and_shows_unavailable(env):
+    from grocery_planner.llm import QuotaExhausted
+    from tests.test_llm import billing
+
+    client = GeminiClient(
+        genai_client=FakeGenai([billing(), billing()]),
+        model=PRIMARY, fallback_model=BACKUP, sleep=lambda s: None,
+        before_request=env.budget.before_request, fallback_allowed=env.budget.fallback_allowed,
+        on_quota_exhausted=env.budget.quota_exhausted,
+    )  # fmt: skip
+    assert env.budget.availability().available
+    with pytest.raises(QuotaExhausted):
+        client.generate("s", "u", Out)
+    a = env.budget.availability()
+    assert not a.available and a.reason == "google_quota"

@@ -27,7 +27,7 @@ from grocery_planner.orchestrator.budget import BudgetUnavailable
 log = logging.getLogger(__name__)
 MIN_RUN_REQUESTS = 3  # fewest requests a run can need: ingredient, price, planner
 STOP_DAY_BUDGET = "day_budget"  # our counter says no new runs fit
-STOP_GOOGLE_QUOTA = "google_quota"  # Google returned a per-day 429 for this model
+STOP_GOOGLE_QUOTA = "google_quota"  # Google returned a per-day 429 or a billing 402
 
 
 @dataclass(frozen=True)
@@ -188,7 +188,7 @@ class InMemoryDayBudget(_Common):
                 self._runs[run_id][0] = 0
 
     def quota_exhausted(self, model: str, kind: str) -> None:
-        if kind == "per_day":
+        if kind in ("per_day", "billing"):
             with self._lock:
                 row = self._row(self._today(), model)
                 row["stopped"], row["reason"] = True, STOP_GOOGLE_QUOTA
@@ -360,7 +360,7 @@ class PostgresDayBudget(_Common):
             conn.execute("UPDATE runs SET reserved_remaining = 0 WHERE id = %s", (run_id,))
 
     def quota_exhausted(self, model: str, kind: str) -> None:
-        if kind != "per_day":
+        if kind not in ("per_day", "billing"):
             return
         day = self._today()
         with self._pool.connection() as conn:

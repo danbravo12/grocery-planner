@@ -34,7 +34,7 @@ class BudgetGuard(Protocol):
     def fallback_allowed(self) -> bool: ...
 
     def quota_exhausted(self, model: str, kind: str) -> None:
-        """Google said this model is out of quota for the day."""
+        """Google said this model is out of quota (per_day) or has no credit (billing) today."""
         ...
 
 

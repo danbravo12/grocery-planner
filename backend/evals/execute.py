@@ -162,7 +162,7 @@ def execute(case: Case, make_llm: LLMFactory, meter: Meter) -> Execution:
     except EvalQuotaExhausted:
         raise  # stops the whole run
     except QuotaExhausted as exc:
-        if exc.kind == "per_day":  # includes our own BudgetExhausted
+        if exc.kind in ("per_day", "billing"):  # includes our own BudgetExhausted
             raise EvalQuotaExhausted(str(exc)) from exc
         kind, msg = "infra", f"{type(exc).__name__}: {exc}"[:300]  # per-minute: not the model
     except LLMUnavailable as exc:  # 5xx / timeouts that outlasted the retries

@@ -167,7 +167,7 @@ def classify_failure(exc: Exception) -> tuple[str, str]:
             "Please try again after the daily reset.",
         )
     if isinstance(exc, QuotaExhausted):
-        if exc.kind == "per_day":
+        if exc.kind in ("per_day", "billing"):  # billing shows the same unavailable message
             return (
                 "daily_quota",
                 "The service has used up today's AI quota. Please try again after the daily reset.",

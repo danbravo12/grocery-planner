@@ -499,6 +499,23 @@ def test_infrastructure_errors_are_not_scored_and_a_daily_quota_stops_the_run():
     assert quota and any(line.startswith("QUOTA") for line in lines)
 
 
+def test_a_billing_stop_aborts_the_run_as_quota_instead_of_scoring_zero():
+    from evals.harness import EvalQuotaExhausted
+    from evals.run import run_all
+    from grocery_planner.llm.types import QuotaExhausted
+
+    case = BY_ID["ing-friday-dinner"]
+    fake = FakeLLMClient([QuotaExhausted("billing", "credits depleted")])
+    with pytest.raises(EvalQuotaExhausted):
+        run_case(case, lambda meter, hooks: _hooked(fake, meter), 1)
+
+    fake = FakeLLMClient([QuotaExhausted("billing"), AssertionError("must not run")])
+    cases = [BY_ID["ing-friday-dinner"], BY_ID["ing-avoid-nuts"]]
+    lines: list[str] = []
+    results, quota = run_all(cases, lambda meter, hooks: _hooked(fake, meter), 1, lines.append)
+    assert results == [] and quota and any(line.startswith("QUOTA") for line in lines)
+
+
 def test_a_cancelled_499_is_infrastructure_but_other_client_errors_are_scored():
     from grocery_planner.llm.types import LLMError
 
