@@ -4,7 +4,7 @@ Oct 13, 2026 · @Daniel · synced to the finished build on 2026-10-19 (v1.0.0). 
 
 ## Overview and goals
 
-This is a public web app where a user describes the meals they plan to cook, and three agents turn that into a shopping list, supermarket prices, and a recommendation on where to shop this week. The goal is a small but properly run production AI system that can be listed on a resume and discussed in interviews, not a product with scale.
+This is a public web app where a user describes the meals they plan to cook, and three agents turn that into a shopping list, supermarket prices, and a recommendation on where to shop this week. The goal is a small but properly run production AI system, not a product with scale.
 
 **Goals**
 
@@ -419,4 +419,4 @@ The build was planned for four weeks and run bottom-up: the deterministic and te
 2. Aldi in the seeded catalogue
 3. The trace panel on the result page (Langfuse stays as the developer view)
 
-**Throughout:** keep a short decision log of what failed and what you changed. Those entries become the interview stories.
+**Throughout:** keep a short decision log of what failed and what you changed (this became [DECISIONS.md](DECISIONS.md)).
