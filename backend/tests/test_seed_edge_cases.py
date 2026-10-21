@@ -181,11 +181,11 @@ def test_special_weeks_zero_is_rejected():
 
 def test_every_special_has_a_regular_price_above_its_special_price(products):
     specials = [p for p in products.values() if p.on_special]
-    assert {p.product_id for p in specials} == {
+    assert {  # the original three; the second batch of ingredients adds more (test_seed_expansion)
         "wol-chicken-breast-01",
         "col-bacon-02",
         "col-fries-02",
-    }
+    } <= {p.product_id for p in specials}
     for p in specials:
         assert p.regular_price is not None and p.regular_price > p.price
         assert p.special_end_date in (date(2026, 10, 20), date(2026, 10, 27))

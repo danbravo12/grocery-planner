@@ -37,6 +37,7 @@ Every choice the design document left open, and everything that broke, one secti
 - [Step 15b (per-agent timeouts, billing message)](#step-15b-per-agent-timeouts-billing-message)
 - [Step 16 (the write-up)](#step-16-the-write-up)
 - [Step 16b (history rewrite, README fixes)](#step-16b-history-rewrite-readme-fixes)
+- [Step 17 (bigger seed, live prices dropped)](#step-17-bigger-seed-live-prices-dropped)
 - [Step 18 (usage counter)](#step-18-usage-counter)
 
 ## Tooling
@@ -535,6 +536,15 @@ Full runbook, commands with their reasons, costs and the smoke test: [DEPLOY.md]
 - **The 500 requests a day is not an assumption.** Daniel checked it in AI Studio for this project's models on 2026-10-14, and Google can change it. The README, NUMBERS.md and the design doc now say that; this corrects the "stays an assumption" wording in steps 4 and 16.
 - **Model-layer bullet** is now the recorded decision (see step 4): a thin in-house layer over `google-genai`, over an agent framework (PydanticAI, LangChain), so every request is visible and counted against the daily budget, and the retries, schema repair and tool loop are code I can explain. This replaces the earlier wording, which described only what the layer had to do.
 - **Licence holder** is Daniel Bravo (it was the GitHub handle).
+
+## Step 17 (bigger seed, live prices dropped)
+- **Live prices from the stores' sites were considered and dropped.** Retrieving prices automatically from the Coles and Woolworths sites may breach their terms, and showing those prices to visitors goes beyond personal use. A live source needs a licensed or permitted feed, behind the same lookup interface. The design document's limitation row now says so; the non-goal "live scraping of supermarket sites in the MVP" stays.
+- **The seed was expanded instead.** 65 new ingredients, 256 new products, 8 new specials: 168 ingredients and 602 products in all, 11 on special. Prices are still seeded and fictional: typical Australian supermarket levels written from general knowledge, with brand names other than Coles and Woolworths invented (Kingsway, Harvest Farm, Bellvue, Goldleaf). Nothing was copied from any source.
+- **The original 346 rows are byte-identical** (a test pins their hash), and no new variant was added to an old ingredient. Every new ingredient is at both stores, with one to three variants per store; the two stores differ by about 0 to 8% item by item, neither cheaper overall.
+- **Name collisions** (the price lookup matches whole words in product names and search terms): the check lists, for every vocabulary name, the products of other ingredients it returns. The first 103 ingredients already had 22 such pairs (`bread` returns bread rolls, `milk` returns coconut milk, `tomato` returns tomato paste). The new ones add six that cannot be named around: `milk` returns oat milk and almond milk, `rice` returns rice noodles, `salmon` returns smoked and canned salmon, `sugar` returns brown sugar. `same_food` rejects all of them. Two names were changed to avoid a collision: `greek yoghurt` is `greek yogurt` (the old yoghurt ingredient already carries `greek yoghurt` as a search term, and a search term containing `yoghurt` would have matched it), and `pita bread` is `pita` (it would have matched `bread`).
+- **Existing tests that had to change.** Vocabulary count 103 to 168 (`test_request_and_vocab.py`, `test_ingredient_agent.py`). `test_seed_edge_cases.py`: the check that the specials are exactly three now checks the original three are among them. `test_ingredient_agent.py`: "chilli flakes", the stand-in for an out-of-vocabulary name, is now a real ingredient, so the stand-in is "dragon fruit". `test_price_agent.py`: the price agent fetches the five cheapest candidates, and for "milk" those are now milk, almond milk and oat milk, so coconut milk is no longer a candidate; the capped-pick test uses oat milk instead (the coconut milk rule itself is still tested by `same_food`).
+- **All new specials end in sale week 2.** Edge case c asserts that exactly two specials end within six days of the anchor; a first-week special would break it.
+- **Not run:** the live evals (they use the free-tier quota). The vocabulary the ingredient agent sees is 65 entries longer and "milk" now returns different candidates, so run them before deploying.
 
 ## Step 18 (usage counter)
 - **What.** A count of unique browsers and runs, without knowing who anyone is. Migration `008_visitors.sql` adds `visitors` (hash, first and last seen, run count, owner flag; RLS on, no policies). It has no `run_id` and no IP, so the privacy line "no run record holds a visitor id" still holds.

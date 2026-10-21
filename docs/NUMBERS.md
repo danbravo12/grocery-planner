@@ -97,4 +97,4 @@ The number of runs a day is a ceiling set by the free tier, not by the server. I
 
 ## 6. The data behind the demo
 
-Counted on 2026-10-19 in the Supabase table `price_catalogue`: **346 products** for **103 ingredients** at two stores, 3 on special. The prices are seeded and fictional.
+Counted on 2026-10-21 in `db/seed/price_catalogue.json` (the file the daily job loads into the Supabase table `price_catalogue`): **602 products** for **168 ingredients** at two stores, 11 on special. The prices are seeded and fictional. The hosted table held 346 products for 103 ingredients, 3 on special (counted on 2026-10-19) until the first seed after the next deploy; the second batch of 65 ingredients (256 products, 8 specials) only reaches it then.
