@@ -77,9 +77,11 @@ curl localhost:8000/api/runs/<run_id>           # the finished run
 | `POST /api/runs` | start a plan (body: the meal form plus optional `parameters`) | 202; 400 bad JSON; 413 body over 32 KB; 422 field messages; 429 `visitor_limit` / `ip_limit`; 503 `unavailable` / `day_budget` / `busy` |
 | `GET /api/runs/{id}` | public run view | 200; 404 |
 | `GET /api/runs/{id}/steps` | step records for the "how it worked" panel | 200; 404 |
+| `GET /internal/stats` | usage counter: runs, unique and returning browsers (scheduler's token only; not in the schema) | 200; 401; 403; 503 |
+| `GET /internal/owner?token=` | mark this browser as the owner's (not in the schema) | 204; 403; 503 |
 | `GET /api/runs/{id}/events` | SSE: replays from `Last-Event-ID` (or `?after=`), then live; heartbeat comment every 15 s; closes after `run_completed` or `run_failed` (a stopped run too); `queued` while waiting | 200; 404 |
 
-Errors are `{code, message}`. Settings (see `.env.example`): `FRONTEND_ORIGINS` (CORS), `TRUSTED_PROXY`, `IP_HASH_SECRET` and `SAMPLE_RUN_ID` (both required with `APP_ENV=prod`, or the API will not start), `API_STORE=memory`. At most 2 plans run at once with up to 10 waiting; a 13th request gets 503 `busy`. The queue is in one process, like the per-minute limiter.
+Errors are `{code, message}`. Settings (see `.env.example`): `FRONTEND_ORIGINS` (CORS), `TRUSTED_PROXY`, `IP_HASH_SECRET`, `SAMPLE_RUN_ID` and `VISITOR_HASH_SECRET` (all required with `APP_ENV=prod`, or the API will not start), `OWNER_TOKEN` (optional; without it `/internal/owner` answers 503), `API_STORE=memory`. At most 2 plans run at once with up to 10 waiting; a 13th request gets 503 `busy`. The queue is in one process, like the per-minute limiter.
 
 ## Run the frontend
 

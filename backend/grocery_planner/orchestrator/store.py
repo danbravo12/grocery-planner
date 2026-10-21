@@ -16,7 +16,7 @@ _RUN_FIELDS = {
     "status", "stop_reason", "failure_reason", "user_message", "ingredient_output",
     "price_output", "planner_output", "models_used", "fell_back", "requests", "tokens_in",
     "tokens_out", "thinking_tokens", "latency_ms", "loopback_used", "completed_at",
-    "langfuse_trace_id", "would_cost_usd",
+    "langfuse_trace_id", "would_cost_usd", "is_owner",
 }  # fmt: skip
 _RUN_JSON = {"ingredient_output", "price_output", "planner_output"}
 

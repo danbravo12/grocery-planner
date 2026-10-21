@@ -235,7 +235,9 @@ def test_visitor_cookie_is_set_once_with_the_right_attributes():
 
 
 def test_cookie_is_secure_in_prod():
-    settings = ApiSettings(app_env="prod", ip_hash_secret="x", sample_run_id="s", **FAST)
+    settings = ApiSettings(
+        app_env="prod", ip_hash_secret="x", sample_run_id="s", visitor_hash_secret="v", **FAST
+    )
     app, _, _, _ = build(settings=settings)
     with TestClient(app, base_url="https://testserver") as client:
         assert "Secure" in post(client).headers["set-cookie"]
@@ -602,7 +604,11 @@ def test_prod_refuses_to_start_without_its_secrets(monkeypatch):
         create_app(ApiSettings(app_env="prod", ip_hash_secret="x"))
     with pytest.raises(ConfigError, match="IP_HASH_SECRET"):
         create_app(ApiSettings(app_env="prod", sample_run_id="x"))
-    create_app(ApiSettings(app_env="prod", ip_hash_secret="x", sample_run_id="y"))
+    with pytest.raises(ConfigError, match="VISITOR_HASH_SECRET"):
+        create_app(ApiSettings(app_env="prod", ip_hash_secret="x", sample_run_id="y"))
+    create_app(
+        ApiSettings(app_env="prod", ip_hash_secret="x", sample_run_id="y", visitor_hash_secret="v")
+    )
     create_app(ApiSettings(app_env="dev"))  # dev needs neither
     monkeypatch.setenv("APP_ENV", "prod")
     monkeypatch.setenv("IP_HASH_SECRET", "")
@@ -611,6 +617,7 @@ def test_prod_refuses_to_start_without_its_secrets(monkeypatch):
         ApiSettings.from_env()
     monkeypatch.setenv("IP_HASH_SECRET", "x")
     monkeypatch.setenv("SAMPLE_RUN_ID", "y")
+    monkeypatch.setenv("VISITOR_HASH_SECRET", "v")
     monkeypatch.setenv("FRONTEND_ORIGINS", "https://a.example/, https://b.example")
     monkeypatch.setenv("TRUSTED_PROXY", "true")
     s = ApiSettings.from_env()
@@ -648,7 +655,9 @@ def test_no_origin_is_allowed_by_default():
 def test_docs_only_exist_in_dev():
     dev, _, _, _ = build(settings=ApiSettings(app_env="dev", **FAST))
     prod, _, _, _ = build(
-        settings=ApiSettings(app_env="prod", ip_hash_secret="x", sample_run_id="y", **FAST)
+        settings=ApiSettings(
+            app_env="prod", ip_hash_secret="x", sample_run_id="y", visitor_hash_secret="v", **FAST
+        )
     )
     with TestClient(dev) as client:
         assert client.get("/docs").status_code == 200

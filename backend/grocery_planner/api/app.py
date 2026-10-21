@@ -2,6 +2,8 @@
 with fake models and an in-memory store, the real one is built from the environment."""
 
 import asyncio
+import hashlib
+import hmac
 import json
 import logging
 import re
@@ -14,7 +16,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from typing import Any, Protocol
 
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Query, Request, Response
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
@@ -26,6 +28,7 @@ from grocery_planner.api.errors import ApiError, install_error_handlers
 from grocery_planner.api.queue import RunQueue
 from grocery_planner.api.settings import ApiSettings
 from grocery_planner.api.views import run_view, step_view
+from grocery_planner.db.visitors import VisitorRepo, visitor_hash
 from grocery_planner.domain import PlannerConfig
 from grocery_planner.domain.request import PlanRequest
 from grocery_planner.guardrails.budget import AdmitResult
@@ -37,6 +40,8 @@ from grocery_planner.tools.price_lookup import today_sydney
 
 log = logging.getLogger(__name__)
 VISITOR_COOKIE = "gp_visitor"
+OWNER_COOKIE = "gp_owner"
+OWNER_COOKIE_DAYS = 400  # the longest a browser keeps a cookie
 _VISITOR_ID = re.compile(r"^[A-Za-z0-9_-]{16,64}$")
 
 
@@ -57,6 +62,7 @@ class Services:
     queue: RunQueue | None = None  # built from the settings when not given
     seed: Callable[[date], int] | None = None  # re-seed the price catalogue (None: no database)
     verify_token: Callable[[str, str, str], None] = verify_google_oidc  # (token, audience, email)
+    visitors: VisitorRepo | None = None  # the usage counter (None: not counted)
 
 
 class CreateRun(PlanRequest):
@@ -139,6 +145,18 @@ def visitor_id_of(request: Request) -> tuple[str, bool]:
     return secrets.token_urlsafe(24), True
 
 
+def owner_cookie_value(owner_token: str) -> str:
+    """What the owner's browser holds: a keyed digest, so the cookie never contains the token."""
+    return hmac.new(owner_token.encode(), b"gp-owner-cookie", hashlib.sha256).hexdigest()
+
+
+def is_owner_request(request: Request, owner_token: str | None) -> bool:
+    if not owner_token:
+        return False
+    held = request.cookies.get(OWNER_COOKIE, "")
+    return secrets.compare_digest(held.encode(), owner_cookie_value(owner_token).encode())
+
+
 def sse(event_type: str, data: Any, event_id: int | None = None) -> str:
     head = f"event: {event_type}\n" + (f"id: {event_id}\n" if event_id is not None else "")
     return head + f"data: {json.dumps(data, default=str)}\n\n"
@@ -215,13 +233,11 @@ def create_app(settings: ApiSettings | None = None, services: Services | None = 
     def health() -> dict[str, str]:
         return {"status": "ok"}
 
-    @app.post("/internal/daily", include_in_schema=False)
-    async def daily(request: Request) -> dict[str, Any]:
-        """Cloud Scheduler's daily job. Fails closed: refused unless it is configured and the
-        caller proves to be the scheduler's service account."""
-        s = need()
+    async def require_scheduler(s: Services, request: Request, what: str) -> None:
+        """Fails closed: refused unless it is configured and the caller proves to be the
+        scheduler's service account (a Google identity token for this service's URL)."""
         if not (settings.daily_audience and settings.daily_sa_email):
-            raise ApiError(503, "not_configured", "The daily job is not configured.")
+            raise ApiError(503, "not_configured", f"The {what} is not configured.")
         scheme, _, token = request.headers.get("authorization", "").partition(" ")
         if scheme.lower() != "bearer" or not token.strip():
             raise ApiError(401, "unauthorized", "A Google identity token is required.")
@@ -230,11 +246,42 @@ def create_app(settings: ApiSettings | None = None, services: Services | None = 
                 s.verify_token, token.strip(), settings.daily_audience, settings.daily_sa_email
             )
         except TokenRejected as exc:
-            log.warning("daily job refused: %s", exc)
+            log.warning("%s refused: %s", what, exc)
             raise ApiError(403, "forbidden", "Not allowed.") from None
+
+    @app.post("/internal/daily", include_in_schema=False)
+    async def daily(request: Request) -> dict[str, Any]:
+        """Cloud Scheduler's daily job."""
+        s = need()
+        await require_scheduler(s, request, "daily job")
         result = await run_in_threadpool(run_daily, s, today_sydney(), settings.prune_keep_days)
         logging.getLogger("uvicorn.error").info("daily job: %s", result)  # uvicorn logs INFO
         return result
+
+    @app.get("/internal/stats", include_in_schema=False)
+    async def stats(request: Request) -> dict[str, Any]:
+        """Runs and unique browsers, leaving out the owner. Protected like the daily job."""
+        s = need()
+        await require_scheduler(s, request, "usage stats")
+        if s.visitors is None:
+            raise ApiError(503, "not_configured", "The usage counter is not configured.")
+        return await run_in_threadpool(s.visitors.stats, today_sydney())
+
+    @app.get("/internal/owner", include_in_schema=False, status_code=204)
+    async def owner(token: str = Query("")) -> Response:
+        """Marks this browser as the owner's (its runs and visits are left out of the stats).
+        The token is compared in constant time; without OWNER_TOKEN the endpoint is closed."""
+        if not settings.owner_token:
+            raise ApiError(503, "not_configured", "The owner cookie is not configured.")
+        if not secrets.compare_digest(token.encode(), settings.owner_token.encode()):
+            raise ApiError(403, "forbidden", "Not allowed.")
+        out = Response(status_code=204)
+        out.set_cookie(
+            OWNER_COOKIE, owner_cookie_value(settings.owner_token),
+            max_age=OWNER_COOKIE_DAYS * 24 * 3600, httponly=True,
+            secure=settings.is_prod, samesite="lax", path="/",
+        )  # fmt: skip
+        return out
 
     @app.get("/api/availability", response_model=schemas.Availability)
     async def availability() -> dict[str, Any]:
@@ -284,7 +331,8 @@ def create_app(settings: ApiSettings | None = None, services: Services | None = 
         visitor, new_cookie = visitor_id_of(request)
         ip = client_ip(request, settings.trusted_proxy)
         # 3. reserve, 4. admit, 5. enqueue (see _accept)
-        run_id = await run_in_threadpool(_accept, s, body, visitor, ip)
+        owner = is_owner_request(request, settings.owner_token)
+        run_id = await run_in_threadpool(_accept, s, body, visitor, ip, owner)
         if new_cookie:
             response.set_cookie(
                 VISITOR_COOKIE, visitor, max_age=365 * 24 * 3600, httponly=True,
@@ -363,7 +411,7 @@ def create_app(settings: ApiSettings | None = None, services: Services | None = 
             headers={"Retry-After": "30"},
         )  # fmt: skip
 
-    def _accept(s: Services, body: CreateRun, visitor: str, ip: str) -> str:
+    def _accept(s: Services, body: CreateRun, visitor: str, ip: str, owner: bool = False) -> str:
         """Reserve the budget, admit the visitor, queue the run. The run row is written first
         because the reservation is recorded against it; a refusal removes it again."""
         request = PlanRequest.model_validate(body.model_dump(exclude={"parameters"}))
@@ -392,9 +440,21 @@ def create_app(settings: ApiSettings | None = None, services: Services | None = 
                 else "Too many plans have been made from your network today."
             )
             raise refuse(ApiError(429, result.reason or "limit", message), release=True)
+        if owner:
+            with suppress(Exception):  # only the stats lose out
+                s.runner.store.update_run(run_id, is_owner=True)
         if not s.queue.try_enqueue(run_id):
             raise refuse(_busy(), release=True)
+        _count_visitor(s, visitor, owner)  # only an accepted run counts, never a refusal
         return run_id
+
+    def _count_visitor(s: Services, visitor: str, owner: bool) -> None:
+        if s.visitors is None or not settings.visitor_hash_secret:
+            return
+        try:
+            s.visitors.record_run(visitor_hash(settings.visitor_hash_secret, visitor), owner)
+        except Exception:
+            log.exception("could not count a visitor")  # never fails the run, never logs the id
 
     async def _load(s: Services, run_id: str):
         run_id = _uuid_or_404(run_id)
