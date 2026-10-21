@@ -37,6 +37,7 @@ Every choice the design document left open, and everything that broke, one secti
 - [Step 15b (per-agent timeouts, billing message)](#step-15b-per-agent-timeouts-billing-message)
 - [Step 16 (the write-up)](#step-16-the-write-up)
 - [Step 16b (history rewrite, README fixes)](#step-16b-history-rewrite-readme-fixes)
+- [Step 18 (usage counter)](#step-18-usage-counter)
 
 ## Tooling
 - **uv installed via a throwaway venv.** The machine had no uv and Python 3.10; uv fetched Python 3.12 itself. `.python-version` pins 3.12 and `requires-python` is `>=3.12,<3.13`.
@@ -534,3 +535,13 @@ Full runbook, commands with their reasons, costs and the smoke test: [DEPLOY.md]
 - **The 500 requests a day is not an assumption.** Daniel checked it in AI Studio for this project's models on 2026-10-14, and Google can change it. The README, NUMBERS.md and the design doc now say that; this corrects the "stays an assumption" wording in steps 4 and 16.
 - **Model-layer bullet** is now the recorded decision (see step 4): a thin in-house layer over `google-genai`, over an agent framework (PydanticAI, LangChain), so every request is visible and counted against the daily budget, and the retries, schema repair and tool loop are code I can explain. This replaces the earlier wording, which described only what the layer had to do.
 - **Licence holder** is Daniel Bravo (it was the GitHub handle).
+
+## Step 18 (usage counter)
+- **What.** A count of unique browsers and runs, without knowing who anyone is. Migration `008_visitors.sql` adds `visitors` (hash, first and last seen, run count, owner flag; RLS on, no policies). It has no `run_id` and no IP, so the privacy line "no run record holds a visitor id" still holds.
+- **The hash** is HMAC-SHA256 of the cookie id under `VISITOR_HASH_SECRET` (required with `APP_ENV=prod`; the app refuses to start without it). The raw id is never stored in this table and neither the hash nor the id is in any response or log (a test reads every response, header and log line). Outside prod, with no secret, nothing is counted at all, so a laptop run against the shared database cannot add random-keyed rows.
+- **When it counts.** After the budget reservation, the visitor and IP admit and the queue all succeeded; a refusal at any step, including a full queue, leaves the table alone. A failing counter is logged without the id and never fails the run.
+- **The owner.** `GET /internal/owner?token=` compares `OWNER_TOKEN` in constant time and sets a 400-day HttpOnly cookie holding a digest of the token (never the token itself); a browser with it is marked `is_owner` on its visitor row. Without `OWNER_TOKEN` the endpoint answers 503. The token travels in a URL, so Cloud Run's request log records it.
+- **Something I added that was not asked for.** The stats must leave out the owner's runs, but `visitors` cannot point at runs, so migration 008 also adds `runs.is_owner` (a boolean, set when the run is queued from the owner's browser). It says a run was the owner's, not whose or which browser. Without it, "runs by status" and "runs per day" would include the owner.
+- **`GET /internal/stats`** is protected exactly like `/internal/daily` (a Google ID token for the service URL from the scheduler's service account; the check is one shared function). It returns total runs, runs by status, runs per day for the last 30 Sydney days (zeros included), unique visitors and returning visitors (two or more runs), all without the owner. Only counts leave the server.
+- **Existing tests that had to change.** The prod start-up tests in `test_api.py` now also set `VISITOR_HASH_SECRET`, because prod requires it.
+- **Checked against a throwaway Postgres 16** (`pgserver`, in a scratch directory, never the project's Supabase database): migration 008 applied through the repo's own `migrate`, and the integration tests (including the new `test_visitors_db.py`) passed. No backfill: counting starts at deploy.

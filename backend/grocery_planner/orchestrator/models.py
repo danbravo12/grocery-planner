@@ -54,6 +54,7 @@ class RunRecord(BaseModel):
     latency_ms: int | None = None
     loopback_used: bool = False
     langfuse_trace_id: str | None = None
+    is_owner: bool = False  # started from the owner's browser: left out of the usage stats
     created_at: datetime
     updated_at: datetime
     completed_at: datetime | None = None

@@ -213,6 +213,7 @@ The database is Supabase Postgres, with plain SQL so the schema stays portable. 
 | `price_catalogue` | Store, product, brand, pack size, price, special and end date, timestamp, `data_source` | Seeded prices behind the lookup tool |
 | `dish_cache` | Dish, normalised avoid text and prompt version to per-serving ingredients | Avoids repeat LLM calls for the same dish |
 | `usage_counters` | Per-visitor and global daily token counts, day-stop flag | Guardrails |
+| `visitors` | An HMAC of the visitor cookie id, first and last seen, run count, owner flag. No `run_id` and no IP | The usage counter: unique and returning browsers |
 
 **Caching:** only the dish expansion is cached, keyed on the dish, its normalised avoid text and the ingredient prompt version (a prompt change makes old rows miss), and a row is written only after the ingredient agent's output passes schema validation. The planner's output is never cached, because it depends on prices and parameters. Scaling by people and days is deterministic code.
 
@@ -240,6 +241,8 @@ Guardrails protect the free Gemini quota and keep a single run from costing too 
 - The internal budget is set below Google's current free-tier limits, which can change. A quota error (429) from Google flips the same day flag. Per-minute limits are watched too, since a burst of users can hit them before the daily limit.
 
 **Per-visitor limits:** with no login, "per user" means an anonymous browser ID in a cookie plus an IP cap: 5 runs per visitor and 20 per IP per Pacific day. The IP is stored only as a hash with a salt that changes every day. This is not bulletproof, and the README names it as a known limitation.
+
+**Visitor id and the usage counter:** the visitor id is a random value in a cookie. It is used raw only for the per-day counters, which are deleted after 7 days. The usage counter (`visitors`) keeps only its HMAC-SHA256 under a stable server secret (`VISITOR_HASH_SECRET`), never the raw id and never an IP, in a table that has no `run_id`; the one thing a run record carries is an owner flag (a boolean, not an id) so the owner's runs can be left out of the totals. Hashes and ids appear in no API response and no log. The stats endpoint is for the scheduler's service account only, and counting starts at deploy (no backfill).
 
 **Input validation:** length limits and type checks on every field, the ranges 1 to 12 people and 1 to 14 days, and at most 20 dishes (mains plus sides) across all meals, which together cap the cost of any single run. The planner's what-if tool is only offered when the best possible split could clear the savings threshold; otherwise it could not change the answer and the planner makes a single plain request.
 
@@ -329,6 +332,8 @@ FastAPI, JSON in and out, errors as `{code, message}` (validation errors add `fi
 | `GET /api/runs/{id}` | The public run view: request, parameters used, status, ingredient list, per-store comparison, recommendation (with the verdict's condition), flags, assumptions, totals, models and would-be cost. 404 for an unknown id |
 | `GET /api/runs/{id}/steps` | Public step records for the trace panel: summaries, tool calls, tokens, latency, model, fallback, the error class name only |
 | `GET /api/runs/{id}/events` | Server-sent events (below) |
+| `GET /internal/stats` | Not in the OpenAPI schema. Total runs, runs by status, runs per day (last 30 days), unique and returning visitors, all leaving out the owner. Only the scheduler's service account (a Google ID token, checked like `/internal/daily`) may call it |
+| `GET /internal/owner?token=` | Not in the OpenAPI schema. With the right `OWNER_TOKEN` (compared in constant time) it sets a 400-day cookie and answers 204, so that browser's runs and visits are left out of the stats |
 
 **Order of checks on `POST /api/runs`:** validate the body (422, 400 for bad JSON, 413 over 32 KB) → is the service open today (503 `unavailable`) → is there room in the queue (503 `busy`) → reserve the run's worst-case budget (503 `busy` or `day_budget`) → admit the visitor and IP (429 `visitor_limit` or `ip_limit`, and the reservation is released) → queue the run (503 `busy` if the queue filled in the meantime, reservation released) → 202. A refusal before admit never touches the visitor's count. The run row is written before the reservation because the budget records the reservation against it; a refused request deletes the row again.
 
@@ -336,9 +341,9 @@ FastAPI, JSON in and out, errors as `{code, message}` (validation errors add `fi
 
 **Events:** `step_started`, `step_completed`, `loopback`, `run_completed`, `run_failed` (also a stopped run, `data.status` says which), each with `id` = its sequence number, replayed from `Last-Event-ID` or `?after=` and then followed live. While a run waits for a worker the stream sends `queued {position}` (no id, so a reconnect is unaffected). A comment heartbeat goes out every 15 s, and the stream closes after the terminal event. `unavailable` is not a stream event: the form reads `/api/availability`.
 
-**Visitor and address:** a random visitor id in an HttpOnly, SameSite=Lax cookie (Secure in prod, one year). The client IP is the socket address, or with `TRUSTED_PROXY=true` the last `X-Forwarded-For` entry, which is the one our own proxy added. Visitor ids and IP hashes are used for the per-day counters only and appear in no response or run record.
+**Visitor and address:** a random visitor id in an HttpOnly, SameSite=Lax cookie (Secure in prod, one year). The client IP is the socket address, or with `TRUSTED_PROXY=true` the last `X-Forwarded-For` entry, which is the one our own proxy added. Visitor ids and IP hashes are used for the per-day counters only and appear in no response or run record; the usage counter keeps only a keyed hash of the visitor id (see Guardrails).
 
-**Startup and hardening:** stale runs are swept at startup and every 5 minutes, and usage counters older than 7 days are pruned daily. With `APP_ENV=prod` the API refuses to start without `IP_HASH_SECRET` and `SAMPLE_RUN_ID`. CORS allows only the origins in `FRONTEND_ORIGINS`, and `/docs` and `/openapi.json` exist only with `APP_ENV=dev`.
+**Startup and hardening:** stale runs are swept at startup and every 5 minutes, and usage counters older than 7 days are pruned daily. With `APP_ENV=prod` the API refuses to start without `IP_HASH_SECRET`, `SAMPLE_RUN_ID` and `VISITOR_HASH_SECRET`. CORS allows only the origins in `FRONTEND_ORIGINS`, and `/docs` and `/openapi.json` exist only with `APP_ENV=dev`.
 
 ## Configuration parameters
 
@@ -374,6 +379,7 @@ Every parameter has a default and a clamped range, and the values used are store
 | --- | --- | --- |
 | Prices are seeded, not live | Scraping is brittle and may breach store terms | A live source behind the same lookup interface, with freshness checks |
 | Per-visitor limits use a cookie and IP, and can be bypassed (clear the cookie, change IP) | No accounts, to keep friction low | Authenticated users and per-account quotas |
+| The usage counter counts unique browsers, not people: clearing cookies or using another device inflates it, and page views without a run are not counted | No accounts, and no tracking of anyone who does not start a run | Authenticated users, and a page-view counter only if it can be cookieless |
 | The per-minute limiter lives in one process | Demo scale, one backend | A shared limiter (database or cache) |
 | Default model is 3.1 Flash-Lite, not 3.5 | 3.5 Flash-Lite had a transient outage at build time | the default model is chosen by eval score (step 11); the probe command (`python -m grocery_planner.llm.probe --model gemini-3.5-flash-lite`) re-checks a model with one request |
 | One free-tier model provider | Cost | A swappable model layer already exists; add fallback providers and paid quota |

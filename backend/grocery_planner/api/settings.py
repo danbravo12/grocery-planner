@@ -30,6 +30,8 @@ class ApiSettings:
     trusted_proxy: bool = False  # read the client IP from X-Forwarded-For
     sample_run_id: str | None = None
     ip_hash_secret: str | None = None
+    visitor_hash_secret: str | None = None  # HMAC key of the usage counter; keep it stable
+    owner_token: str | None = None  # what /internal/owner needs to mark a browser as the owner's
     daily_audience: str | None = None  # the service URL the scheduler's token is addressed to
     daily_sa_email: str | None = None  # the only service account allowed to call /internal/daily
     frontend_dist: Path | None = None  # the built frontend, served from the same origin
@@ -60,6 +62,7 @@ class ApiSettings:
                 for name, value in (
                     ("IP_HASH_SECRET", self.ip_hash_secret),
                     ("SAMPLE_RUN_ID", self.sample_run_id),
+                    ("VISITOR_HASH_SECRET", self.visitor_hash_secret),
                 )
                 if not value
             ]
@@ -82,6 +85,8 @@ class ApiSettings:
             trusted_proxy=_flag("TRUSTED_PROXY"),
             sample_run_id=(getenv("SAMPLE_RUN_ID") or "").strip() or None,
             ip_hash_secret=(getenv("IP_HASH_SECRET") or "").strip() or None,
+            visitor_hash_secret=(getenv("VISITOR_HASH_SECRET") or "").strip() or None,
+            owner_token=(getenv("OWNER_TOKEN") or "").strip() or None,
             daily_audience=(getenv("DAILY_JOB_AUDIENCE") or "").strip().rstrip("/") or None,
             daily_sa_email=(getenv("DAILY_JOB_SA_EMAIL") or "").strip() or None,
             frontend_dist=_dist(),
