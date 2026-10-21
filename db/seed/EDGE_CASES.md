@@ -25,3 +25,17 @@ Other useful rows (not edge cases, but present): `col-fries-02` is a second-week
 | `wol-chicken-breast-01` | $8.50 | $11.50 | Tue 2026-10-20 (`special_weeks: 1`) |
 | `col-bacon-02` | $4.50 | $7.00 | Tue 2026-10-20 (`special_weeks: 1`) |
 | `col-fries-02` | $3.00 | $4.50 | Tue 2026-10-27 (`special_weeks: 2`) |
+| `wol-pork-belly-01` | $8.90 | $11.50 | Tue 2026-10-27 (`special_weeks: 2`) |
+| `col-strawberries-01` | $2.90 | $4.00 | Tue 2026-10-27 (`special_weeks: 2`) |
+| `wol-blueberries-01` | $3.50 | $4.60 | Tue 2026-10-27 (`special_weeks: 2`) |
+| `col-halloumi-01` | $4.00 | $5.50 | Tue 2026-10-27 (`special_weeks: 2`) |
+| `wol-pasta-sauce-02` | $2.50 | $3.60 | Tue 2026-10-27 (`special_weeks: 2`) |
+| `col-pesto-02` | $2.80 | $4.20 | Tue 2026-10-27 (`special_weeks: 2`) |
+| `wol-chicken-wings-01` | $5.50 | $8.20 | Tue 2026-10-27 (`special_weeks: 2`) |
+| `col-frozen-pizza-02` | $4.00 | $6.50 | Tue 2026-10-27 (`special_weeks: 2`) |
+
+The last eight come with the second batch of 65 ingredients (see below). None of them is in a first-week sale: case c asserts that exactly two specials end within six days of the anchor, so a first-week special would change it.
+
+## Second batch of ingredients
+
+65 more ingredients (`tests/test_seed_expansion.py`), all sold at both stores, with the same shape as the first 103. Prices differ between the stores by about 0 to 8% item by item, with neither store cheaper overall. Some have a larger house-brand pack at a lower price per unit (`col-pork-mince-03`, `col-orange-02`, `col-frozen-corn-03`), and some a budget house brand (`col-passata-01`, `col-red-lentils-01`). Six of their names also match another ingredient's products when searched whole-word (`oat milk` and `almond milk` for `milk`, `rice noodles` for `rice`, `smoked salmon` and `canned salmon` for `salmon`, `brown sugar` for `sugar`); `same_food` rejects each, and the test lists them.

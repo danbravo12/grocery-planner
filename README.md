@@ -120,7 +120,7 @@ Each of these is a decision in [docs/DECISIONS.md](docs/DECISIONS.md), with the 
 
 ## Limitations and what I'd change at scale
 
-- **Prices are seeded and fictional.** A live source would sit behind the same lookup interface, with freshness checks.
+- **Prices are seeded and fictional.** A live source needs a licensed or permitted feed, behind the same lookup interface, with freshness checks.
 - **One Cloud Run instance**, because the queue, the per-minute limiter and the sweeps are in memory. At scale: a shared queue and limiter, then more instances.
 - **Development and production share one Supabase database and one Gemini quota.** A laptop run spends the same free-tier requests. At scale: separate environments and a paid key per environment.
 - **Visitor and IP limits are bypassable** (clear the cookie, change IP). There are no accounts. At scale: authenticated users and per-account quotas.

@@ -475,11 +475,12 @@ def test_hash_browns_for_potato_gems_is_capped_at_substitute():
     assert any(f.kind == "different_food" for f in result.flags)
 
 
-def test_coconut_milk_for_milk_is_capped_even_when_claimed_exact():
+def test_oat_milk_for_milk_is_capped_even_when_claimed_exact():
+    # was coconut milk; the five cheapest "milk" candidates are now milk, almond and oat milk
     items = [item("i1", "milk", 2000, "ml")]
     result, _ = price(
         items,
-        batch(entry("i1", ("col-coconut-milk-01", "exact"), ("wol-coconut-milk-01", "exact"))),
+        batch(entry("i1", ("col-oat-milk-01", "exact"), ("wol-oat-milk-01", "exact"))),
     )
     assert [r.match_tier for r in result.items] == ["substitute", "substitute"]
     assert [d.kind for d in result.downgrades] == ["different_food"] * 2

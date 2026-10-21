@@ -108,7 +108,7 @@ This agent finds a comparable product for each purchasable item at each store an
 
 **Input:** the purchasable items list and the stores to check.
 
-**Tool:** one price lookup that returns candidate products for a search term. At first it reads a seeded catalogue of about 100 ingredients. It returns the same fields a live source would, including a price timestamp, so swapping sources later is a config change. Seeded specials and price ages are stored relative to an anchor date (default: today), so specials never go stale. **Specials run Wednesday to Tuesday**, as at Coles and Woolworths: a seeded special says which sale week it ends in (`special_weeks`: 1 is the Tuesday ending the week that contains the anchor, 2 the Tuesday after), and every special carries a `regular_price`, the shelf price once it is over (validated to be higher than the special price).
+**Tool:** one price lookup that returns candidate products for a search term. At first it reads a seeded catalogue of 168 ingredients (602 products). It returns the same fields a live source would, including a price timestamp, so swapping sources later is a config change. Seeded specials and price ages are stored relative to an anchor date (default: today), so specials never go stale. **Specials run Wednesday to Tuesday**, as at Coles and Woolworths: a seeded special says which sale week it ends in (`special_weeks`: 1 is the Tuesday ending the week that contains the anchor, 2 the Tuesday after), and every special carries a `regular_price`, the shelf price once it is over (validated to be higher than the special price).
 
 **Flow:** code pre-fetches up to five candidates per item per store (only the named brand when the user named one) and computes packs, purchased quantity, leftover, total cost, unit price and whether a special is active. One batched model call then picks a candidate per item per store, or none, with a tier and confidence. Code enforces the tier rules afterwards, downgrading and flagging any pick that breaks them. If a store had no usable pick and the model suggested search terms, there is one retry round (a single extra model call). The planner's loop-back reuses the same machinery.
 
@@ -372,7 +372,7 @@ Every parameter has a default and a clamped range, and the values used are store
 
 | Limitation | Why it exists | What changes at scale |
 | --- | --- | --- |
-| Prices are seeded, not live | Scraping is brittle and may breach store terms | A live source behind the same lookup interface, with freshness checks |
+| Prices are seeded, not live | Live prices from the stores' sites were considered and dropped: automated retrieval may breach their terms, and showing their prices to visitors goes beyond personal use. The seed was expanded instead | A live source needs a licensed or permitted feed, behind the same lookup interface, with freshness checks |
 | Per-visitor limits use a cookie and IP, and can be bypassed (clear the cookie, change IP) | No accounts, to keep friction low | Authenticated users and per-account quotas |
 | The per-minute limiter lives in one process | Demo scale, one backend | A shared limiter (database or cache) |
 | Default model is 3.1 Flash-Lite, not 3.5 | 3.5 Flash-Lite had a transient outage at build time | the default model is chosen by eval score (step 11); the probe command (`python -m grocery_planner.llm.probe --model gemini-3.5-flash-lite`) re-checks a model with one request |
