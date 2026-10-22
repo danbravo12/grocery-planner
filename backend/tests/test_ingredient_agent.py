@@ -71,7 +71,7 @@ def test_three_uncached_dishes_make_exactly_one_request():
     assert (r.cache.hits, r.cache.misses) == (0, 3) and len(cache.rows) == 3
     payload = json.loads(fake.calls[0]["user"])
     assert [d["dish_name"] for d in payload["dishes"]] == ["fillet mignon", "potato salad", "fries"]
-    assert len(payload["vocabulary"]) == 103
+    assert len(payload["vocabulary"]) == 168
 
 
 def test_all_cached_means_zero_llm_calls():
@@ -242,7 +242,7 @@ def test_batch_model_rejects_vocabulary_unit_and_id_mistakes():
     ok = batch(dish("d1", ing("Beef Mince", 100)))
     Checked.model_validate(ok.model_dump())
     bad_cases = {
-        "not in the vocabulary": batch(dish("d1", ing("chilli flakes", 2, in_vocab=True))),
+        "not in the vocabulary": batch(dish("d1", ing("dragon fruit", 2, in_vocab=True))),
         "must use the vocabulary unit 'each'": batch(dish("d1", ing("eggs", 100, "g"))),
         "set in_vocabulary to true": batch(dish("d1", ing("beef mince", 100, in_vocab=False))),
         "expected exactly one entry": batch(dish("d9", ing("beef mince", 100))),
@@ -252,7 +252,7 @@ def test_batch_model_rejects_vocabulary_unit_and_id_mistakes():
             Checked.model_validate(bad.model_dump())
     with pytest.raises(ValidationError, match="expected exactly one entry"):
         Checked.model_validate(batch().model_dump())
-    Checked.model_validate(batch(dish("d1", ing("chilli flakes", 2, in_vocab=False))).model_dump())
+    Checked.model_validate(batch(dish("d1", ing("dragon fruit", 2, in_vocab=False))).model_dump())
 
 
 def test_agent_hands_the_model_layer_a_checking_output_type():
@@ -280,7 +280,7 @@ def _json(*dishes):
 
 @pytest.mark.parametrize(
     "bad_ingredient",
-    [("chilli flakes", 2, "g", True), ("eggs", 100, "g", True)],
+    [("dragon fruit", 2, "g", True), ("eggs", 100, "g", True)],
     ids=["out-of-vocabulary-claimed-in", "unit-mismatch"],
 )
 def test_vocabulary_and_unit_mistakes_trigger_the_one_repair(bad_ingredient):
@@ -294,7 +294,7 @@ def test_vocabulary_and_unit_mistakes_trigger_the_one_repair(bad_ingredient):
 
 
 def test_failed_repair_raises_and_caches_nothing():
-    bad = text(_json(("d1", [("chilli flakes", 2, "g", True)])))
+    bad = text(_json(("d1", [("dragon fruit", 2, "g", True)])))
     h = run([bad, bad])
     cache = InMemoryDishCache()
     with pytest.raises(SchemaValidationFailed):

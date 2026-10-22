@@ -66,7 +66,7 @@ def test_plan_request_meal_count():
 
 def test_vocabulary_shape():
     vocab = ingredient_vocabulary()
-    assert len(vocab) == 103
+    assert len(vocab) == 168
     assert vocab["beef eye fillet"].category == "meat" and vocab["beef eye fillet"].unit == "g"
     assert vocab["eggs"].unit == "each" and vocab["milk"].unit == "ml"
     staples = {e.name for e in vocab.values() if e.pantry_staple}
