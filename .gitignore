@@ -26,3 +26,6 @@ frontend/dist/
 
 # work in progress, not part of the release
 v2_docs/
+
+# local PDF copies of docs/
+docs_pdfs/
