@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Creates the seven Secret Manager secrets for the Cloud Run service and lets the runtime service
 # account read them. Run it yourself in a terminal: it asks for each value with hidden input, so
-# nothing is shown, logged or stored in your shell history. Safe to re-run: an existing secret
-# gets a new version (that is also how you rotate one, see docs/DEPLOY.md).
+# nothing is shown, logged or stored in your shell history. Safe to re-run: a secret that already
+# exists is kept and not asked for. To rotate one, run it with ROTATE=1: it then asks for every
+# value again and adds a new version of each you enter (see docs/DEPLOY.md).
 set -euo pipefail
 
 GCLOUD="${GCLOUD:-$HOME/google-cloud-sdk/bin/gcloud}"
@@ -25,6 +26,10 @@ put() {  # put NAME  (value on stdin)
 }
 
 ask() {  # ask NAME "what to paste"
+  if [ -z "${ROTATE:-}" ] && "$GCLOUD" secrets describe "$1" --project="$PROJECT" >/dev/null 2>&1; then
+    echo "  $1 already exists; keeping it (ROTATE=1 ./deploy/create-secrets.sh asks again)"
+    return
+  fi
   local value
   read -rsp "$2: " value; echo
   [ -n "$value" ] || { echo "empty, skipped $1"; return; }
