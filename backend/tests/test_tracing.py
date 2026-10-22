@@ -95,7 +95,7 @@ def test_happy_path_tree_is_one_span_per_step_and_one_generation_per_request():
     # trace-level attributes
     assert root.attrs["app_env"] == "dev" and root.attrs["run_id"] == run_id
     assert root.attrs["tags"] == [
-        "dev", "ingredient@2", "price@2", "planner@5", "model:fake-model",
+        "dev", "ingredient@3", "price@2", "planner@5", "model:fake-model",
     ]  # fmt: skip
     meta = root.attrs["metadata"]
     assert meta["as_of"] == "2026-10-14" and meta["meals"] == 1 and meta["dishes"] == 1
@@ -105,7 +105,7 @@ def test_happy_path_tree_is_one_span_per_step_and_one_generation_per_request():
     # step spans carry the summary as output and a code-work summary in metadata
     ingredient, price, plan = root.children
     assert ingredient.attrs["output"] == "2 items from 1 dishes (0 cached)"
-    assert ingredient.attrs["prompt_ref"] == "ingredient@2" and ingredient.attrs["attempt"] == 1
+    assert ingredient.attrs["prompt_ref"] == "ingredient@3" and ingredient.attrs["attempt"] == 1
     assert (
         ingredient.attrs["metadata"]["cache_hits"] == 0
         and ingredient.attrs["metadata"]["items"] == 2
@@ -449,7 +449,7 @@ def test_langfuse_tracer_emits_the_expected_spans_and_attributes():
     a = dict(root.attributes)
     assert a["langfuse.trace.name"] == "plan_run" and a["langfuse.environment"] == "eval"
     assert set(a["langfuse.trace.tags"]) == {
-        "eval", "ingredient@2", "price@2", "planner@5", "model:fake-model",
+        "eval", "ingredient@3", "price@2", "planner@5", "model:fake-model",
     }  # fmt: skip
     assert json.loads(a["langfuse.observation.metadata.config"])["savings_threshold_dollars"] == "8"
     # parenting: generations sit under their step spans, steps under the root
@@ -459,7 +459,7 @@ def test_langfuse_tracer_emits_the_expected_spans_and_attributes():
     for name in ("ingredient", "price", "planner"):
         assert by_name[name][0].parent.span_id == root.context.span_id
     # a generation: type, model, usage, the prompt by name, and no visitor or IP anywhere
-    gen = next(s for s in by_name["llm_request"] if "ingredient@2" in str(dict(s.attributes)))
+    gen = next(s for s in by_name["llm_request"] if "ingredient@3" in str(dict(s.attributes)))
     g = dict(gen.attributes)
     assert g["langfuse.observation.type"] == "generation"
     assert g["langfuse.observation.model.name"] == "fake-model"
@@ -469,7 +469,7 @@ def test_langfuse_tracer_emits_the_expected_spans_and_attributes():
         "thinking": 0,
     }
     inp = json.loads(g["langfuse.observation.input"])
-    assert inp["system_prompt"] == "ingredient@2" and "dishes" in json.loads(inp["user"])
+    assert inp["system_prompt"] == "ingredient@3" and "dishes" in json.loads(inp["user"])
     assert "You are the ingredient step" not in g["langfuse.observation.input"]  # not the full text
     everything = json.dumps([dict(s.attributes) for s in spans], default=str).lower()
     assert "visitor" not in everything and '"ip"' not in everything
