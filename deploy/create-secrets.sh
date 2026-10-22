@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Creates the five Secret Manager secrets for the Cloud Run service and lets the runtime service
+# Creates the seven Secret Manager secrets for the Cloud Run service and lets the runtime service
 # account read them. Run it yourself in a terminal: it asks for each value with hidden input, so
 # nothing is shown, logged or stored in your shell history. Safe to re-run: an existing secret
 # gets a new version (that is also how you rotate one, see docs/DEPLOY.md).
@@ -40,6 +40,16 @@ if "$GCLOUD" secrets describe IP_HASH_SECRET --project="$PROJECT" >/dev/null 2>&
   echo "  IP_HASH_SECRET already exists; keeping it (a new one would reset today's IP counts)"
 else
   openssl rand -hex 32 | put IP_HASH_SECRET
+fi
+if "$GCLOUD" secrets describe VISITOR_HASH_SECRET --project="$PROJECT" >/dev/null 2>&1; then
+  echo "  VISITOR_HASH_SECRET already exists; keeping it (a new one would make every browser new)"
+else
+  openssl rand -hex 32 | put VISITOR_HASH_SECRET
+fi
+if "$GCLOUD" secrets describe OWNER_TOKEN --project="$PROJECT" >/dev/null 2>&1; then
+  echo "  OWNER_TOKEN already exists; keeping it (read it with: gcloud secrets versions access latest --secret=OWNER_TOKEN --project=$PROJECT)"
+else
+  openssl rand -hex 32 | put OWNER_TOKEN
 fi
 echo "Done. Secrets in ${PROJECT}:"
 "$GCLOUD" secrets list --project="$PROJECT" --format="table(name.basename(),createTime.date())"
